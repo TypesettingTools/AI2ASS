@@ -91,7 +91,7 @@ manageColor = function(currPath, field) {
       return handleGray(currPath[field]);
     case "CMYKColor":
       return handleCMYK(currPath[field]);
-    case "noColor":
+    case "NoColor":
       return false;
     default:
       alert("Unsupported colorspace used.");
@@ -105,13 +105,17 @@ collectPaths = function(callback) {
   for (_i = 0, _len = _ref.length; _i < _len; _i++) {
     currPath = _ref[_i];
     lname = currPath.layer.name;
-    fgc = "\\c" + manageColor(currPath, "fillColor");
+    fgc = manageColor(currPath, "fillColor");
     if (!fgc) {
       fgc = "\\1a&HFF&";
+    } else {
+      fgc = "\\c" + fgc;
     }
-    sc = "\\3c" + manageColor(currPath, "strokeColor");
+    sc = manageColor(currPath, "strokeColor");
     if (!sc) {
-      sc = "\\3a&HFF&";
+      sc = "\\bord0";
+    } else {
+      sc = "\\3c" + sc;
     }
     if (!drawStrs[lname]) {
       drawStrs[lname] = "{" + fgc + sc + "\\p" + scl + "}";

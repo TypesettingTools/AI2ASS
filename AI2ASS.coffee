@@ -59,7 +59,7 @@ manageColor = (currPath,field) ->
       return handleGray currPath[field]
     when "CMYKColor"
       return handleCMYK currPath[field]
-    when "noColor"
+    when "NoColor"
       return false
     else
       alert "Unsupported colorspace used."
@@ -72,10 +72,16 @@ manageColor = (currPath,field) ->
 collectPaths = (callback) ->
   for currPath in app.activeDocument.pathItems
     lname = currPath.layer.name
-    fgc = "\\c"+manageColor currPath,"fillColor"
-    fgc = "\\1a&HFF&" unless fgc
-    sc = "\\3c"+manageColor currPath,"strokeColor"
-    sc = "\\3a&HFF&" unless sc
+    fgc = manageColor currPath,"fillColor"
+    unless fgc
+      fgc = "\\1a&HFF&"
+    else
+      fgc = "\\c"+fgc
+    sc = manageColor currPath,"strokeColor"
+    unless sc
+      sc = "\\bord0"
+    else
+      sc = "\\3c"+sc
     drawStrs[lname] = "{"+fgc+sc+"\\p"+scl+"}" unless drawStrs[lname]
     points = currPath.pathPoints
     if points.length > 0
