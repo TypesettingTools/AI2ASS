@@ -1,12 +1,15 @@
 app.userInteractionLevel = UserInteractionLevel.DISPLAYALERTS # This should be the default, but CAN'T BE TOO CAREFUL
+doc = app.activeDocument
+alert "your colorspace needs to be RGB if you want colors." if doc.documentColorSpace == DocumentColorSpace.CMYK
 scl = parseInt prompt "Scale by 2^(n-1) (minimum 1)",1
 drawStrs = {}
 drawCom = 0
 
 # I guess it uses some sort of JIT magic because functions have to be declared in order?
 fixCoords = (coordArr) ->
-  coordArr[0] = Math.round(coordArr[0]*Math.pow(2,scl-1))
-  coordArr[1] = -Math.round(coordArr[1]*Math.pow(2,scl-1))
+  org = doc.rulerOrigin
+  coordArr[0] = Math.round((coordArr[0] + org[0])*Math.pow(2,scl-1))
+  coordArr[1] = Math.round((doc.height - (org[1] + coordArr[1]))*Math.pow(2,scl-1))
   coordArr.join(" ")
 
 linear = (currPoint) ->
@@ -24,21 +27,14 @@ cubic = (currPoint, prevPoint) ->
   drawing += fixCoords(prevPoint.rightDirection,scl)+" "+fixCoords(currPoint.leftDirection,scl)+" "+fixCoords(currPoint.anchor,scl)+" "
 
 byLayer = () ->
-  for currLayer in [app.activeDocument.layers.length-1..0] by -1
-    currLayer = app.activeDocument.layers[currLayer].name
-    prompt("COPY THIS",drawStrs[currLayer].replace(/[ ]$/,""),"copy it") if drawStrs[currLayer]
+  for currLayer in [doc.layers.length-1..0] by -1
+    currLayer = doc.layers[currLayer].name
+    herp = prompt("COPY THIS",drawStrs[currLayer].replace(/[ ]$/,""),"copy it") if drawStrs[currLayer]
+  herp = null
 
 zeroPad = (num) ->
   return "0"+num.toString(16) if num < 16
   return num.toString(16)
-
-handleCMYK = (theColor) ->
-  c = theColor.cyan/100; m = theColor.magenta/100
-  y = theColor.yellow/100; k = theColor.black/100
-  r = Math.round (1-c)*(1-k)*255
-  b = Math.round (1-y)*(1-k)*255
-  g = Math.round (1-m)*(1-k)*255
-  ("&H"+zeroPad(b)+zeroPad(g)+zeroPad(r)+"&").toUpperCase()
 
 handleGray = (theColor) ->
   pct = theColor.gray
@@ -46,42 +42,37 @@ handleGray = (theColor) ->
   ("&H"+zeroPad(pct)+zeroPad(pct)+zeroPad(pct)+"&").toUpperCase()
 
 handleRGB = (theColor) ->
-  r = Math.round theColor.red
+  r = Math.round theColor.red # why am I rounding these?
   g = Math.round theColor.green
   b = Math.round theColor.blue
   ("&H"+zeroPad(b)+zeroPad(g)+zeroPad(r)+"&").toUpperCase()
 
-manageColor = (currPath,field) ->
+manageColor = (currPath,field,ASSField) ->
+  fmt = ""
   switch currPath[field].typename
     when "RGBColor"
-      return handleRGB currPath[field]
+      fmt = handleRGB currPath[field]
     when "GrayColor" 
-      return handleGray currPath[field]
-    when "CMYKColor"
-      return handleCMYK currPath[field]
+      fmt = handleGray currPath[field]
     when "NoColor"
-      return false
+      switch field # not sure I really want this much nesting but oh well
+        when "fillColor"
+          return "\\#{ASSField}a&HFF&"
+        when "strokeColor"
+          return "\\bord0"
     else
-      alert "Unsupported colorspace used."
-      error()
+      return ""
+  return "\\#{ASSField}c#{fmt}"
   # "GradientColor"
   # "LabColor"
   # "PatternColor"
   # "SpotColor"
 
 collectPaths = (callback) ->
-  for currPath in app.activeDocument.pathItems
+  for currPath in doc.pathItems
     lname = currPath.layer.name
-    fgc = manageColor currPath,"fillColor"
-    unless fgc
-      fgc = "\\1a&HFF&"
-    else
-      fgc = "\\c"+fgc
-    sc = manageColor currPath,"strokeColor"
-    unless sc
-      sc = "\\bord0"
-    else
-      sc = "\\3c"+sc
+    fgc = manageColor currPath, "fillColor", 1
+    sc = manageColor currPath,"strokeColor", 3
     drawStrs[lname] = "{"+fgc+sc+"\\p"+scl+"}" unless drawStrs[lname]
     points = currPath.pathPoints
     if points.length > 0
@@ -100,4 +91,3 @@ collectPaths = (callback) ->
   callback()
 
 collectPaths(byLayer) # because it looks clever
-
