@@ -23,9 +23,10 @@ After that, it should appear in the menu as `File > Scripts > AI2ASS`.
 
 #### TODO ####
 - Switch to per-compound-path-shape design (this may end up being ugly and complicated).
-- use stroke width for `\bord` (maybe?)
-- produce centered drawings for `\an5`
-- support gradients? (I have no idea how to even start)
+- Use stroke width for `\bord` (maybe?)
+- Make use of ScriptUI for ease-of-use.
+- Produce centered drawings for `\an5`
+- Support gradients? (I have no idea how to even start)
 
 \*"Export" is in quotes because the interface consists of a prompt that pops up with copyable text. This is terrible design, but I don't know of a better way to do it given the restrictions of the scripting interface.
 
