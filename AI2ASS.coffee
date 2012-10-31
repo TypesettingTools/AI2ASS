@@ -12,6 +12,11 @@ fixCoords = (coordArr) ->
   coordArr[1] = Math.round((doc.height - (org[1] + coordArr[1]))*Math.pow(2,scl-1))
   coordArr.join(" ")
 
+checkLinear = (currPoint, prevPoint) ->
+  p1 = (prevPoint.anchor[0] == prevPoint.rightDirection[0] && prevPoint.anchor[1] == prevPoint.rightDirection[1])
+  p2 = (currPoint.anchor[0] == currPoint.leftDirection[0] && currPoint.anchor[1] == currPoint.leftDirection[1])
+  (p1 && p2)
+
 linear = (currPoint) ->
   drawing = ""
   if drawCom != 1
@@ -34,11 +39,11 @@ byLayer = () ->
 
 zeroPad = (num) ->
   return "0"+num.toString(16) if num < 16
-  return num.toString(16)
+  num.toString(16)
 
 handleGray = (theColor) ->
   pct = theColor.gray
-  pct = Math.round pct*255/100
+  pct = Math.round (100-pct)*255/100
   ("&H"+zeroPad(pct)+zeroPad(pct)+zeroPad(pct)+"&").toUpperCase()
 
 handleRGB = (theColor) ->
@@ -80,13 +85,13 @@ collectPaths = (callback) ->
       drawStrs[lname] += "m "+fixCoords(points[0].anchor,scl)+" "
       for j in [1...points.length] by 1
         currPoint = points[j]; prevPoint = points[j-1]
-        if currPoint.pointType == PointType.CORNER && prevPoint.pointType == PointType.CORNER
+        if checkLinear(currPoint,prevPoint)
           drawStrs[lname] += linear currPoint
         else
           drawStrs[lname] += cubic currPoint,prevPoint
       prevPoint = points[points.length-1]
       currPoint = points[0]
-      if currPoint.pointType == PointType.SMOOTH || prevPoint.pointType == PointType.SMOOTH
+      unless checkLinear(currPoint, prevPoint)
         drawStrs[lname] += cubic currPoint,prevPoint
   callback()
 
