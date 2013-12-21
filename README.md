@@ -1,5 +1,6 @@
 ## AI2ASS ##
 ![sweet screenshot][screenshit]
+
 This is a script to "export"\* drawings in Adobe Illustrator as ASS vector objects. It was inspired by tophf's similar script for CorelDRAW.
 
 It only acts upon the currently focused document.
