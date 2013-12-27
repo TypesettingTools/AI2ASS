@@ -13,7 +13,7 @@ value.graphics.font = "Comic Sans MS:12"
 value.onChanging = ->
   slider.value = Number value.text
 
-slider = input.add 'slider', undefined, 1, 1, 11 # {minValue: 1, maxValue: 11, value: 1}')
+slider = input.add 'slider', undefined, 1, 1, 11
 
 slider.onChanging = ->
   value.text = Math.round slider.value
@@ -50,6 +50,7 @@ fuckThis = ( options ) ->
   currLayer = doc.activeLayer
   scaleFactor = Math.pow 2, options.scale - 1
   drawCom = 0
+  alert "Your colorspace needs to be RGB if you want colors." if doc.documentColorSpace == DocumentColorSpace.CMYK
 
   fixCoords = ( coordArr ) ->
     org = doc.rulerOrigin
@@ -165,24 +166,26 @@ fuckThis = ( options ) ->
 
     collectInnerShadow: ->
       outputStr = ""
+      clipStart = if options.scale is 1 then "" else "#{options.scale},"
+      for outerGroup in currLayer.groupItems
+        for group in outerGroup.groupItems
+          outlinePaths = group.compoundPathItems[0].pathItems
+          outlineStr = ""
+          glyphPaths = group.compoundPathItems[1].pathItems
+          glyphStr = ""
 
-      for group in currLayer.groupItems[0].groupItems
-        outlinePaths = group.compoundPathItems[0].pathItems
-        outlineStr = ""
-        glyphPaths = group.compoundPathItems[1].pathItems
-        glyphStr = ""
+          for currPath in glyphPaths
+            glyphStr += createDrawingFromPoints currPath.pathPoints
 
-        for currPath in glyphPaths
-          glyphStr += createDrawingFromPoints currPath.pathPoints
+          for currPath in outlinePaths
+            outlineStr += createDrawingFromPoints currPath.pathPoints
 
-        for currPath in outlinePaths
-          outlineStr += createDrawingFromPoints currPath.pathPoints
+          glyphStr = glyphStr[0...-1]
+          outlineStr = "{\\clip(#{clipStart}#{glyphStr})\\p#{options.scale}}#{outlineStr[0...-1]}"
+          glyphStr = "{\\p#{options.scale}}#{glyphStr}"
+          outputStr += "#{glyphStr}\n#{outlineStr}\n"
 
-        outlineStr = "{\\clip(#{options.scale},#{glyphStr[0...-1]})\\p#{options.scale}}#{outlineStr[0...-1]}"
-        glyphStr = "{\\p#{options.scale}}#{glyphStr}"
-        outputStr += "#{glyphStr}\n#{outlineStr[0...-1]}\n"
-
-      "{innerShadow}\n#{outputStr}"
+      "{innerShadow}\n#{outputStr}"[0...-2]
 
     collectAllLayers: ->
       output = {}
@@ -203,7 +206,7 @@ fuckThis = ( options ) ->
       for key, val of output
         overall += "#{val[0...-1]}\n"
 
-      "{allLayers}\n#{overall}"
+      "{allLayers}\n#{overall}"[0...-2]
   }
 
   methods[options.method]()

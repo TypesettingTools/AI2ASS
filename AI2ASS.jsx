@@ -69,6 +69,9 @@ fuckThis = function(options) {
   currLayer = doc.activeLayer;
   scaleFactor = Math.pow(2, options.scale - 1);
   drawCom = 0;
+  if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+    alert("Your colorspace needs to be RGB if you want colors.");
+  }
   fixCoords = function(coordArr) {
     var org;
     org = doc.rulerOrigin;
@@ -186,28 +189,34 @@ fuckThis = function(options) {
       return outputStr.slice(0, -1);
     },
     collectInnerShadow: function() {
-      var currPath, glyphPaths, glyphStr, group, outlinePaths, outlineStr, outputStr, _i, _j, _k, _len, _len1, _len2, _ref;
+      var clipStart, currPath, glyphPaths, glyphStr, group, outerGroup, outlinePaths, outlineStr, outputStr, _i, _j, _k, _l, _len, _len1, _len2, _len3, _ref, _ref1;
       outputStr = "";
-      _ref = currLayer.groupItems[0].groupItems;
+      clipStart = options.scale === 1 ? "" : "" + options.scale + ",";
+      _ref = currLayer.groupItems;
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-        group = _ref[_i];
-        outlinePaths = group.compoundPathItems[0].pathItems;
-        outlineStr = "";
-        glyphPaths = group.compoundPathItems[1].pathItems;
-        glyphStr = "";
-        for (_j = 0, _len1 = glyphPaths.length; _j < _len1; _j++) {
-          currPath = glyphPaths[_j];
-          glyphStr += createDrawingFromPoints(currPath.pathPoints);
+        outerGroup = _ref[_i];
+        _ref1 = outerGroup.groupItems;
+        for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
+          group = _ref1[_j];
+          outlinePaths = group.compoundPathItems[0].pathItems;
+          outlineStr = "";
+          glyphPaths = group.compoundPathItems[1].pathItems;
+          glyphStr = "";
+          for (_k = 0, _len2 = glyphPaths.length; _k < _len2; _k++) {
+            currPath = glyphPaths[_k];
+            glyphStr += createDrawingFromPoints(currPath.pathPoints);
+          }
+          for (_l = 0, _len3 = outlinePaths.length; _l < _len3; _l++) {
+            currPath = outlinePaths[_l];
+            outlineStr += createDrawingFromPoints(currPath.pathPoints);
+          }
+          glyphStr = glyphStr.slice(0, -1);
+          outlineStr = "{\\clip(" + clipStart + glyphStr + ")\\p" + options.scale + "}" + outlineStr.slice(0, -1);
+          glyphStr = "{\\p" + options.scale + "}" + glyphStr;
+          outputStr += "" + glyphStr + "\n" + outlineStr + "\n";
         }
-        for (_k = 0, _len2 = outlinePaths.length; _k < _len2; _k++) {
-          currPath = outlinePaths[_k];
-          outlineStr += createDrawingFromPoints(currPath.pathPoints);
-        }
-        outlineStr = "{\\clip(" + options.scale + "," + glyphStr.slice(0, -1) + ")\\p" + options.scale + "}" + outlineStr.slice(0, -1);
-        glyphStr = "{\\p" + options.scale + "}" + glyphStr;
-        outputStr += "" + glyphStr + "\n" + outlineStr.slice(0, -1) + "\n";
       }
-      return "{innerShadow}\n" + outputStr;
+      return ("{innerShadow}\n" + outputStr).slice(0, -2);
     },
     collectAllLayers: function() {
       var currPath, fgc, key, output, outputStr, overall, sc, val, _i, _len, _ref;
@@ -231,7 +240,7 @@ fuckThis = function(options) {
         val = output[key];
         overall += "" + val.slice(0, -1) + "\n";
       }
-      return "{allLayers}\n" + overall;
+      return ("{allLayers}\n" + overall).slice(0, -2);
     }
   };
   return methods[options.method]();
