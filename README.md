@@ -36,6 +36,13 @@ After that, it should appear in the menu as `File > Scripts > AI2ASS`. Running
 this will pop up a persistent window with a button you can click to convert the
 active layer into an ASS drawing. You don't need to close this ever. It's neat.
 
+#### WARNING: SHIT MOVES SLOW WHEN YOU HAVE A LOT OF STUFF GOING ON ####
+
+This script can cause Illustrator to beachball for quite a while. Naturally,
+this primarily depends on the complexity of the shapes you are exporting. For
+example, exporting 130 paths as independent ASS lines takes my computer around
+20 seconds.
+
 ### What the bloody hell does `collectInnerShadow` mean? ###
 
 This script makes it easy to create an inner shadow effect in ASS by turning the
@@ -45,20 +52,25 @@ required. I will list the WorksForMe™ steps here and I cannot promise they wil
 work for you or even for me on another version of Illustrator. I have used this
 (and probably will only ever use this) on Illustrator CS 5.5 on OS X.
 
+The effect looks something like this:
+
+![Inner Shadow][innerShadow]
+
 #### STEPS ####
  1. Type what you want in the font you want.
  2. Convert the text into outlines.
  3. Add a stroke to it. Usually 4 px or so is good. Make sure it is aligned to the outside.
  4. In the menu: `Object > Path > Outline Stroke`
  5. Export with `collectInnerShadow`
- 6. Use the macro I haven't written yet to import them into Aegisub efficiently.
+ 6. Use the macro provided by `applyLines.moon` to import them into Aegisub efficiently. That said, this macro is an inflexible piece of garbage because I just don't care.
 
 ### TODO ###
 - AINT NOTHIN THIS IS PERFECT
 
 <sup>†</sup>The exporting process consists of sticking generated ASS into a
-window that as copyable text. This is terrible design, but I don't know of a
-better way to do it given the restrictions of the scripting interface.
+window that as copyable text. This is still terrible design, but at least it's
+slightly better than it used to be.
 
 [screenshit]: https://raw.github.com/torque/AI2ASS/master/screenshot.png
 [raw]: https://raw.github.com/torque/AI2ASS/master/AI2ASS.jsx
+[innerShadow]: https://raw.github.com/torque/AI2ASS/master/innershadow.png
