@@ -36,7 +36,7 @@ textCtrl.graphics.font = "Comic Sans MS:12";
 
 textCtrl.text = "have ass will travel";
 
-collectionMethod = win.add("dropdownlist", [0, 0, 250, 20], ["collectActiveLayer", "collectInnerShadow", "collectAllLayers"]);
+collectionMethod = win.add("dropdownlist", [0, 0, 250, 20], ["collectActiveLayer", "collectInnerShadow", "collectAllLayers", "CG_collectActiveLayer"]);
 
 collectionMethod.graphics.font = "Comic Sans MS:12";
 
@@ -63,21 +63,25 @@ goButton.onClick = function() {
 };
 
 fuckThis = function(options) {
-  var checkLinear, createDrawingFromPoints, cubic, currLayer, doc, drawCom, fixCoords, handleGray, handleRGB, linear, manageColor, methods, scaleFactor, zeroPad;
+  var ASS_createDrawingFromPoints, ASS_cubic, ASS_fixCoords, ASS_linear, CG_createDrawingFromPoints, CG_cubic, CG_fixCoords, CG_linear, checkLinear, currLayer, doc, drawCom, handleGray, handleRGB, manageColor, methods, org, scaleFactor, zeroPad;
   app.userInteractionLevel = UserInteractionLevel.DISPLAYALERTS;
   doc = app.activeDocument;
+  org = doc.rulerOrigin;
   currLayer = doc.activeLayer;
   scaleFactor = Math.pow(2, options.scale - 1);
   drawCom = 0;
   if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
     alert("Your colorspace needs to be RGB if you want colors.");
   }
-  fixCoords = function(coordArr) {
-    var org;
-    org = doc.rulerOrigin;
+  ASS_fixCoords = function(coordArr) {
     coordArr[0] = Math.round((coordArr[0] + org[0]) * scaleFactor);
     coordArr[1] = Math.round((doc.height - (org[1] + coordArr[1])) * scaleFactor);
     return coordArr.join(" ");
+  };
+  CG_fixCoords = function(coordArr) {
+    coordArr[0] = Math.round((coordArr[0] + org[0]) * 100) / 100;
+    coordArr[1] = Math.round((coordArr[1] + org[1]) * 100) / 100;
+    return coordArr.join(", ");
   };
   checkLinear = function(currPoint, prevPoint) {
     var p1, p2;
@@ -85,23 +89,29 @@ fuckThis = function(options) {
     p2 = currPoint.anchor[0] === currPoint.leftDirection[0] && currPoint.anchor[1] === currPoint.leftDirection[1];
     return p1 && p2;
   };
-  linear = function(currPoint) {
+  ASS_linear = function(currPoint) {
     var drawing;
     drawing = "";
     if (drawCom !== 1) {
       drawCom = 1;
       drawing = "l ";
     }
-    return drawing += "" + (fixCoords(currPoint.anchor)) + " ";
+    return drawing += "" + (ASS_fixCoords(currPoint.anchor)) + " ";
   };
-  cubic = function(currPoint, prevPoint) {
+  CG_linear = function(currPoint) {
+    return "CGContextAddLineToPoint(ctx, " + (CG_fixCoords(currPoint.anchor)) + ");\n";
+  };
+  ASS_cubic = function(currPoint, prevPoint) {
     var drawing;
     drawing = "";
     if (drawCom !== 2) {
       drawCom = 2;
       drawing = "b ";
     }
-    return drawing += "" + (fixCoords(prevPoint.rightDirection)) + " " + (fixCoords(currPoint.leftDirection)) + " " + (fixCoords(currPoint.anchor)) + " ";
+    return drawing += "" + (ASS_fixCoords(prevPoint.rightDirection)) + " " + (ASS_fixCoords(currPoint.leftDirection)) + " " + (ASS_fixCoords(currPoint.anchor)) + " ";
+  };
+  CG_cubic = function(currPoint, prevPoint) {
+    return "CGContextAddCurveToPoint(ctx, " + (CG_fixCoords(prevPoint.rightDirection)) + ", " + (CG_fixCoords(currPoint.leftDirection)) + ", " + (CG_fixCoords(currPoint.anchor)) + ");\n";
   };
   zeroPad = function(num) {
     if (num < 16) {
@@ -146,25 +156,48 @@ fuckThis = function(options) {
     }
     return "\\" + ASSField + "c" + fmt;
   };
-  createDrawingFromPoints = function(pathPoints) {
+  ASS_createDrawingFromPoints = function(pathPoints) {
     var currPoint, drawStr, j, prevPoint, _i, _ref;
     drawStr = "";
     if (pathPoints.length > 0) {
       drawCom = 0;
-      drawStr += "m " + (fixCoords(pathPoints[0].anchor)) + " ";
+      drawStr += "m " + (ASS_fixCoords(pathPoints[0].anchor)) + " ";
       for (j = _i = 1, _ref = pathPoints.length; _i < _ref; j = _i += 1) {
         currPoint = pathPoints[j];
         prevPoint = pathPoints[j - 1];
         if (checkLinear(currPoint, prevPoint)) {
-          drawStr += linear(currPoint);
+          drawStr += ASS_linear(currPoint);
         } else {
-          drawStr += cubic(currPoint, prevPoint);
+          drawStr += ASS_cubic(currPoint, prevPoint);
         }
       }
       prevPoint = pathPoints[pathPoints.length - 1];
       currPoint = pathPoints[0];
       if (!checkLinear(currPoint, prevPoint)) {
-        drawStr += cubic(currPoint, prevPoint);
+        drawStr += ASS_cubic(currPoint, prevPoint);
+      }
+      return drawStr;
+    }
+    return "";
+  };
+  CG_createDrawingFromPoints = function(pathPoints) {
+    var currPoint, drawStr, j, prevPoint, _i, _ref;
+    drawStr = "";
+    if (pathPoints.length > 0) {
+      drawStr += "CGContextMoveToPoint(ctx, " + (CG_fixCoords(pathPoints[0].anchor)) + ");\n";
+      for (j = _i = 1, _ref = pathPoints.length; _i < _ref; j = _i += 1) {
+        currPoint = pathPoints[j];
+        prevPoint = pathPoints[j - 1];
+        if (checkLinear(currPoint, prevPoint)) {
+          drawStr += CG_linear(currPoint);
+        } else {
+          drawStr += CG_cubic(currPoint, prevPoint);
+        }
+      }
+      prevPoint = pathPoints[pathPoints.length - 1];
+      currPoint = pathPoints[0];
+      if (!checkLinear(currPoint, prevPoint)) {
+        drawStr += CG_cubic(currPoint, prevPoint);
       }
       return drawStr;
     }
@@ -183,10 +216,22 @@ fuckThis = function(options) {
             sc = manageColor(currPath, "strokeColor", 3);
             outputStr += "{" + fgc + sc + "\\p" + options.scale + "}";
           }
-          outputStr += createDrawingFromPoints(currPath.pathPoints);
+          outputStr += ASS_createDrawingFromPoints(currPath.pathPoints);
         }
       }
       return outputStr.slice(0, -1);
+    },
+    CG_collectActiveLayer: function() {
+      var currPath, outputStr, _i, _len, _ref;
+      outputStr = "";
+      _ref = doc.pathItems;
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        currPath = _ref[_i];
+        if (currPath.layer.name === currLayer.name) {
+          outputStr += CG_createDrawingFromPoints(currPath.pathPoints);
+        }
+      }
+      return outputStr;
     },
     collectInnerShadow: function() {
       var clipStart, currPath, glyphPaths, glyphStr, group, outerGroup, outlinePaths, outlineStr, outputStr, _i, _j, _k, _l, _len, _len1, _len2, _len3, _ref, _ref1;
@@ -204,11 +249,11 @@ fuckThis = function(options) {
           glyphStr = "";
           for (_k = 0, _len2 = glyphPaths.length; _k < _len2; _k++) {
             currPath = glyphPaths[_k];
-            glyphStr += createDrawingFromPoints(currPath.pathPoints);
+            glyphStr += ASS_createDrawingFromPoints(currPath.pathPoints);
           }
           for (_l = 0, _len3 = outlinePaths.length; _l < _len3; _l++) {
             currPath = outlinePaths[_l];
-            outlineStr += createDrawingFromPoints(currPath.pathPoints);
+            outlineStr += ASS_createDrawingFromPoints(currPath.pathPoints);
           }
           glyphStr = glyphStr.slice(0, -1);
           outlineStr = "{\\clip(" + clipStart + glyphStr + ")\\p" + options.scale + "}" + outlineStr.slice(0, -1);
@@ -226,7 +271,7 @@ fuckThis = function(options) {
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
         currPath = _ref[_i];
         outputStr = "";
-        outputStr += createDrawingFromPoints(currPath.pathPoints);
+        outputStr += ASS_createDrawingFromPoints(currPath.pathPoints);
         if (!output[currPath.layer.name]) {
           fgc = manageColor(currPath, "fillColor", 1);
           sc = manageColor(currPath, "strokeColor", 3);

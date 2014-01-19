@@ -22,7 +22,7 @@ textCtrl = win.add "edittext", [0, 0, 250, 80], "", {multiline: true}
 textCtrl.graphics.font = "Comic Sans MS:12"
 textCtrl.text = "have ass will travel"
 
-collectionMethod = win.add "dropdownlist", [0,0,250,20], ["collectActiveLayer","collectInnerShadow","collectAllLayers"]
+collectionMethod = win.add "dropdownlist", [0,0,250,20], ["collectActiveLayer","collectInnerShadow","collectAllLayers", "CG_collectActiveLayer"]
 collectionMethod.graphics.font = "Comic Sans MS:12"
 collectionMethod.selection = 0
 
@@ -47,39 +47,53 @@ goButton.onClick = ->
 fuckThis = ( options ) ->
   app.userInteractionLevel = UserInteractionLevel.DISPLAYALERTS # This should be the default, but CAN'T BE TOO CAREFUL
   doc = app.activeDocument
+  org = doc.rulerOrigin
   currLayer = doc.activeLayer
   scaleFactor = Math.pow 2, options.scale - 1
   drawCom = 0
   alert "Your colorspace needs to be RGB if you want colors." if doc.documentColorSpace == DocumentColorSpace.CMYK
 
-  fixCoords = ( coordArr ) ->
-    org = doc.rulerOrigin
+  # For ASS, the origin is the top-left corner
+  ASS_fixCoords = ( coordArr ) ->
     coordArr[0] = Math.round (coordArr[0] + org[0])*scaleFactor
     coordArr[1] = Math.round (doc.height - (org[1] + coordArr[1]))*scaleFactor
     coordArr.join " "
+
+  # for CoreGraphics, the origin is the bottom-left corner. Except on IOS
+  # where it's the top-left corner. But I don't care about IOS.
+  CG_fixCoords = ( coordArr ) ->
+    coordArr[0] = Math.round( (coordArr[0] + org[0])*100 )/100
+    coordArr[1] = Math.round( (coordArr[1] + org[1])*100 )/100
+    coordArr.join ", "
 
   checkLinear = ( currPoint, prevPoint ) ->
     p1 = (prevPoint.anchor[0] == prevPoint.rightDirection[0] && prevPoint.anchor[1] == prevPoint.rightDirection[1])
     p2 = (currPoint.anchor[0] == currPoint.leftDirection[0] && currPoint.anchor[1] == currPoint.leftDirection[1])
     (p1 && p2)
 
-  linear = ( currPoint ) ->
+  ASS_linear = ( currPoint ) ->
     drawing = ""
 
     if drawCom != 1
       drawCom = 1
       drawing = "l "
 
-    drawing += "#{fixCoords currPoint.anchor} "
+    drawing += "#{ASS_fixCoords currPoint.anchor} "
 
-  cubic = ( currPoint, prevPoint ) ->
+  CG_linear = ( currPoint ) ->
+    "CGContextAddLineToPoint(ctx, #{CG_fixCoords currPoint.anchor});\n"
+
+  ASS_cubic = ( currPoint, prevPoint ) ->
     drawing = ""
 
     if drawCom != 2
       drawCom = 2
       drawing = "b "
 
-    drawing += "#{fixCoords prevPoint.rightDirection} #{fixCoords currPoint.leftDirection} #{fixCoords currPoint.anchor} "
+    drawing += "#{ASS_fixCoords prevPoint.rightDirection} #{ASS_fixCoords currPoint.leftDirection} #{ASS_fixCoords currPoint.anchor} "
+
+  CG_cubic = ( currPoint, prevPoint ) ->
+    "CGContextAddCurveToPoint(ctx, #{CG_fixCoords prevPoint.rightDirection}, #{CG_fixCoords currPoint.leftDirection}, #{CG_fixCoords currPoint.anchor});\n"
 
   zeroPad = ( num ) ->
     if num < 16
@@ -121,27 +135,51 @@ fuckThis = ( options ) ->
     # "PatternColor"
     # "SpotColor"
 
-  createDrawingFromPoints = ( pathPoints ) ->
+  ASS_createDrawingFromPoints = ( pathPoints ) ->
     drawStr = ""
 
     if pathPoints.length > 0
       drawCom = 0
-      drawStr += "m #{fixCoords pathPoints[0].anchor} "
+      drawStr += "m #{ASS_fixCoords pathPoints[0].anchor} "
 
       for j in [1...pathPoints.length] by 1
         currPoint = pathPoints[j]
         prevPoint = pathPoints[j-1]
 
         if checkLinear currPoint, prevPoint
-          drawStr += linear currPoint
+          drawStr += ASS_linear currPoint
         else
-          drawStr += cubic currPoint, prevPoint
+          drawStr += ASS_cubic currPoint, prevPoint
 
       prevPoint = pathPoints[pathPoints.length-1]
       currPoint = pathPoints[0]
 
       unless checkLinear currPoint, prevPoint
-        drawStr += cubic currPoint, prevPoint
+        drawStr += ASS_cubic currPoint, prevPoint
+
+      return drawStr
+
+    return ""
+
+  CG_createDrawingFromPoints = ( pathPoints ) ->
+    drawStr = ""
+
+    if pathPoints.length > 0
+      drawStr += "CGContextMoveToPoint(ctx, #{CG_fixCoords pathPoints[0].anchor});\n"
+      for j in [1...pathPoints.length] by 1
+        currPoint = pathPoints[j]
+        prevPoint = pathPoints[j-1]
+
+        if checkLinear currPoint, prevPoint
+          drawStr += CG_linear currPoint
+        else
+          drawStr += CG_cubic currPoint, prevPoint
+
+      prevPoint = pathPoints[pathPoints.length-1]
+      currPoint = pathPoints[0]
+
+      unless checkLinear currPoint, prevPoint
+        drawStr += CG_cubic currPoint, prevPoint
 
       return drawStr
 
@@ -160,9 +198,19 @@ fuckThis = ( options ) ->
             sc = manageColor currPath, "strokeColor", 3
             outputStr += "{#{fgc}#{sc}\\p#{options.scale}}"
 
-          outputStr += createDrawingFromPoints currPath.pathPoints
+          outputStr += ASS_createDrawingFromPoints currPath.pathPoints
 
       outputStr[0...-1]
+
+    CG_collectActiveLayer: ->
+      outputStr = ""
+
+      for currPath in doc.pathItems
+
+        if currPath.layer.name is currLayer.name
+          outputStr += CG_createDrawingFromPoints currPath.pathPoints
+
+      outputStr
 
     collectInnerShadow: ->
       outputStr = ""
@@ -175,10 +223,10 @@ fuckThis = ( options ) ->
           glyphStr = ""
 
           for currPath in glyphPaths
-            glyphStr += createDrawingFromPoints currPath.pathPoints
+            glyphStr += ASS_createDrawingFromPoints currPath.pathPoints
 
           for currPath in outlinePaths
-            outlineStr += createDrawingFromPoints currPath.pathPoints
+            outlineStr += ASS_createDrawingFromPoints currPath.pathPoints
 
           glyphStr = glyphStr[0...-1]
           outlineStr = "{\\clip(#{clipStart}#{glyphStr})\\p#{options.scale}}#{outlineStr[0...-1]}"
@@ -193,7 +241,7 @@ fuckThis = ( options ) ->
 
       for currPath in doc.pathItems
         outputStr = ""
-        outputStr += createDrawingFromPoints currPath.pathPoints
+        outputStr += ASS_createDrawingFromPoints currPath.pathPoints
 
         unless output[currPath.layer.name]
           fgc = manageColor currPath, "fillColor", 1
