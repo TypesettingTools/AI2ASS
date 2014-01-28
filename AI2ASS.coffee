@@ -166,6 +166,7 @@ fuckThis = ( options ) ->
 
     if pathPoints.length > 0
       drawStr += "CGContextMoveToPoint(ctx, #{CG_fixCoords pathPoints[0].anchor});\n"
+
       for j in [1...pathPoints.length] by 1
         currPoint = pathPoints[j]
         prevPoint = pathPoints[j-1]
@@ -193,12 +194,14 @@ fuckThis = ( options ) ->
 
         if currPath.layer.name is currLayer.name
 
-          if outputStr.length is 0
-            fgc = manageColor currPath, "fillColor", 1
-            sc = manageColor currPath, "strokeColor", 3
-            outputStr += "{#{fgc}#{sc}\\p#{options.scale}}"
+          unless currPath.hidden or currPath.guides or currPath.clipping
 
-          outputStr += ASS_createDrawingFromPoints currPath.pathPoints
+            if outputStr.length is 0
+              fgc = manageColor currPath, "fillColor", 1
+              sc = manageColor currPath, "strokeColor", 3
+              outputStr += "{#{fgc}#{sc}\\p#{options.scale}}"
+
+            outputStr += ASS_createDrawingFromPoints currPath.pathPoints
 
       outputStr[0...-1]
 
@@ -215,7 +218,9 @@ fuckThis = ( options ) ->
     collectInnerShadow: ->
       outputStr = ""
       clipStart = if options.scale is 1 then "" else "#{options.scale},"
+
       for outerGroup in currLayer.groupItems
+
         for group in outerGroup.groupItems
           outlinePaths = group.compoundPathItems[0].pathItems
           outlineStr = ""
@@ -240,16 +245,18 @@ fuckThis = ( options ) ->
       overall = ""
 
       for currPath in doc.pathItems
-        outputStr = ""
-        outputStr += ASS_createDrawingFromPoints currPath.pathPoints
 
-        unless output[currPath.layer.name]
-          fgc = manageColor currPath, "fillColor", 1
-          sc = manageColor currPath, "strokeColor", 3
-          outputStr = "{#{fgc}#{sc}\\p#{options.scale}}#{outputStr}"
-          output[currPath.layer.name] = outputStr
-        else
-          output[currPath.layer.name] += outputStr
+        unless currPath.hidden or currPath.guides or currPath.clipping
+          outputStr = ""
+          outputStr += ASS_createDrawingFromPoints currPath.pathPoints
+
+          unless output[currPath.layer.name]
+            fgc = manageColor currPath, "fillColor", 1
+            sc = manageColor currPath, "strokeColor", 3
+            outputStr = "{#{fgc}#{sc}\\p#{options.scale}}#{outputStr}"
+            output[currPath.layer.name] = outputStr
+          else
+            output[currPath.layer.name] += outputStr
 
       for key, val of output
         overall += "#{val[0...-1]}\n"

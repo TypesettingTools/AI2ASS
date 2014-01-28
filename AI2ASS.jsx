@@ -211,12 +211,14 @@ fuckThis = function(options) {
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
         currPath = _ref[_i];
         if (currPath.layer.name === currLayer.name) {
-          if (outputStr.length === 0) {
-            fgc = manageColor(currPath, "fillColor", 1);
-            sc = manageColor(currPath, "strokeColor", 3);
-            outputStr += "{" + fgc + sc + "\\p" + options.scale + "}";
+          if (!(currPath.hidden || currPath.guides || currPath.clipping)) {
+            if (outputStr.length === 0) {
+              fgc = manageColor(currPath, "fillColor", 1);
+              sc = manageColor(currPath, "strokeColor", 3);
+              outputStr += "{" + fgc + sc + "\\p" + options.scale + "}";
+            }
+            outputStr += ASS_createDrawingFromPoints(currPath.pathPoints);
           }
-          outputStr += ASS_createDrawingFromPoints(currPath.pathPoints);
         }
       }
       return outputStr.slice(0, -1);
@@ -270,15 +272,17 @@ fuckThis = function(options) {
       _ref = doc.pathItems;
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
         currPath = _ref[_i];
-        outputStr = "";
-        outputStr += ASS_createDrawingFromPoints(currPath.pathPoints);
-        if (!output[currPath.layer.name]) {
-          fgc = manageColor(currPath, "fillColor", 1);
-          sc = manageColor(currPath, "strokeColor", 3);
-          outputStr = "{" + fgc + sc + "\\p" + options.scale + "}" + outputStr;
-          output[currPath.layer.name] = outputStr;
-        } else {
-          output[currPath.layer.name] += outputStr;
+        if (!(currPath.hidden || currPath.guides || currPath.clipping)) {
+          outputStr = "";
+          outputStr += ASS_createDrawingFromPoints(currPath.pathPoints);
+          if (!output[currPath.layer.name]) {
+            fgc = manageColor(currPath, "fillColor", 1);
+            sc = manageColor(currPath, "strokeColor", 3);
+            outputStr = "{" + fgc + sc + "\\p" + options.scale + "}" + outputStr;
+            output[currPath.layer.name] = outputStr;
+          } else {
+            output[currPath.layer.name] += outputStr;
+          }
         }
       }
       for (key in output) {
