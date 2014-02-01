@@ -272,7 +272,7 @@ fuckThis = function(options) {
       _ref = doc.pathItems;
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
         currPath = _ref[_i];
-        if (!(currPath.hidden || currPath.guides || currPath.clipping)) {
+        if (!(currPath.hidden || currPath.guides || currPath.clipping || currPath.layer.visible)) {
           outputStr = "";
           outputStr += ASS_createDrawingFromPoints(currPath.pathPoints);
           if (!output[currPath.layer.name]) {
