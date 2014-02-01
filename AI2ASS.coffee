@@ -246,7 +246,7 @@ fuckThis = ( options ) ->
 
       for currPath in doc.pathItems
 
-        unless currPath.hidden or currPath.guides or currPath.clipping or currPath.layer.visible
+        unless currPath.hidden or currPath.guides or currPath.clipping or not currPath.layer.visible
           outputStr = ""
           outputStr += ASS_createDrawingFromPoints currPath.pathPoints
 
