@@ -199,7 +199,7 @@ fuckThis = ( options ) ->
             if outputStr.length is 0
               fgc = manageColor currPath, "fillColor", 1
               sc = manageColor currPath, "strokeColor", 3
-              outputStr += "{#{fgc}#{sc}\\p#{options.scale}}"
+              outputStr += "{\\pos(0,0)#{fgc}#{sc}\\p#{options.scale}}"
 
             outputStr += ASS_createDrawingFromPoints currPath.pathPoints
 
@@ -253,7 +253,7 @@ fuckThis = ( options ) ->
           unless output[currPath.layer.name]
             fgc = manageColor currPath, "fillColor", 1
             sc = manageColor currPath, "strokeColor", 3
-            outputStr = "{#{fgc}#{sc}\\p#{options.scale}}#{outputStr}"
+            outputStr = "{\\pos(0,0)#{fgc}#{sc}\\p#{options.scale}}#{outputStr}"
             output[currPath.layer.name] = outputStr
           else
             output[currPath.layer.name] += outputStr
