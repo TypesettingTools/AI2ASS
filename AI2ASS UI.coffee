@@ -1,4 +1,4 @@
-`#target Bridge`
+`#target illustrator`
 `#targetengine main`
 `#include "./ai2ass.jsxinc"`
 
