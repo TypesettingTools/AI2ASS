@@ -12,25 +12,30 @@ ai2assBackend = ( options ) ->
     str: ""
     lastFill: ""
     lastStroke: ""
+    lastLayer: ""
     append: ( toAppend ) ->
       @str += toAppend
 
     init: ( path ) ->
       @lastFill = manageColor path, "fillColor", 1
       @lastStroke = manageColor path, "strokeColor", 3
+      @lastLayer = path.layer.name
 
       @append @prefix( )
 
     split: options.split or ( path ) ->
       fillColor = manageColor path, "fillColor", 1
       strokeColor = manageColor path, "strokeColor", 3
+      layerName = path.layer.name
 
       fillChange = fillColor isnt @lastFill
       strokeChange = strokeColor isnt @lastStroke
+      layerChange = layerName isnt @lastLayer
 
-      if fillChange or strokeChange
+      if fillChange or strokeChange or layerChange
         @lastFill = fillColor
         @lastStroke = strokeColor
+        @lastLayer = layerName
 
         @append "#{@suffix( )}\n#{@prefix( )}"
 
