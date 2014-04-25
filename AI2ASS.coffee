@@ -1,62 +1,28 @@
-`#targetengine session`
-win = new Window "palette", "Export ASS" , undefined, {resizeable: true}
-
-input = win.add "group"
-input.orientation = "row"
-
-label = input.add 'statictext', undefined, 'Scale Factor: '
-label.graphics.font = "Comic Sans MS:12"
-
-value = input.add 'edittext {text: 1, characters: 2, justify: "center", active: true}'
-value.graphics.font = "Comic Sans MS:12"
-
-value.onChanging = ->
-  slider.value = Number value.text
-
-slider = input.add 'slider', undefined, 1, 1, 11
-
-slider.onChanging = ->
-  value.text = Math.round slider.value
-
-textCtrl = win.add "edittext", [0, 0, 250, 80], "", {multiline: true}
-textCtrl.graphics.font = "Comic Sans MS:12"
-textCtrl.text = "have ass will travel"
-
-collectionMethod = win.add "dropdownlist", [0,0,250,20], ["collectActiveLayer","collectInnerShadow","collectAllLayers", "CG_collectActiveLayer"]
-collectionMethod.graphics.font = "Comic Sans MS:12"
-collectionMethod.selection = 0
-
-goButton = win.add "button", undefined, "Export"
-goButton.graphics.font = "Comic Sans MS:12"
-
-goButton.onClick = ->
-  textCtrl.active = false
-  bt = new BridgeTalk
-  bt.target = "illustrator"
-  bt.body = "(#{fuckThis.toString()})({scale:#{value.text},method:\"#{collectionMethod.selection.text}\"});"
-
-  bt.onResult = ( result ) ->
-    textCtrl.text = result.body.replace( /\\\\/g, "\\" ).replace /\\n/g, "\n"
-    textCtrl.active = true
-
-  bt.onError = ( err ) ->
-    alert "#{err.body} (#{a.headers["Error-Code"]})"
-
-  bt.send()
-
-fuckThis = ( options ) ->
-  app.userInteractionLevel = UserInteractionLevel.DISPLAYALERTS # This should be the default, but CAN'T BE TOO CAREFUL
+ai2assBackend = ( options ) ->
+  app.userInteractionLevel = UserInteractionLevel.DISPLAYALERTS
   doc = app.activeDocument
   org = doc.rulerOrigin
   currLayer = doc.activeLayer
-  scaleFactor = Math.pow 2, options.scale - 1
   drawCom = 0
+
+
+
+
+
+
+
+
+
+
+
+
+
   alert "Your colorspace needs to be RGB if you want colors." if doc.documentColorSpace == DocumentColorSpace.CMYK
 
   # For ASS, the origin is the top-left corner
   ASS_fixCoords = ( coordArr ) ->
-    coordArr[0] = Math.round (coordArr[0] + org[0])*scaleFactor
-    coordArr[1] = Math.round (doc.height - (org[1] + coordArr[1]))*scaleFactor
+    coordArr[0] = Math.round( (coordArr[0] + org[0])*100 )/100
+    coordArr[1] = Math.round( (doc.height - (org[1] + coordArr[1]))*100 )/100
     coordArr.join " "
 
   # for CoreGraphics, the origin is the bottom-left corner. Except on IOS
