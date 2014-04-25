@@ -40,7 +40,7 @@ ai2assBackend = ( options ) ->
         @append "#{@suffix( )}\n#{@prefix( )}"
 
     appendPath: ( path ) ->
-      unless path.hidden or path.guides or path.clipping or not (path.stroked or path.filled)
+      unless path.hidden or path.guides or path.clipping or not (path.stroked or path.filled) or not path.layer.visible
         @split( path )
         @append ASS_createDrawingFromPoints path.pathPoints
 
@@ -239,6 +239,8 @@ ai2assBackend = ( options ) ->
       # LAYER, WHICH MEANS IT IS IMPOSSIBLE TO REPRODUCE THE WAY
       # SUBLAYERS ARE LAYERED. TL;DR IF YOU STICK A LAYER INSIDE ANOTHER
       # LAYER, FUCK YOU FOREVER.
+      unless currLayer.visible
+        return "Not doing anything to that invisible layer."
 
       for pageItem in currLayer.pageItems
         recursePageItem pageItem, output
