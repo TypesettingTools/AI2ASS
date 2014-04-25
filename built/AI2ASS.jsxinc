@@ -4,8 +4,8 @@ var ai2assBackend;
 ai2assBackend = function(options) {
   var ASS_createDrawingFromPoints, ASS_cubic, ASS_fixCoords, ASS_linear, CG_createDrawingFromPoints, CG_cubic, CG_fixCoords, CG_linear, allThePaths, checkLinear, currLayer, doc, drawCom, handleGray, handleRGB, manageColor, methods, org, output, pWin, recursePageItem, zeroPad;
   pWin = new Window("palette");
-  pWin.pBar = pWin.add("progressbar", void 0, 0, 1000);
-  pWin.pBar.preferredSize = [300, 15];
+  pWin.pBar = pWin.add("progressbar", void 0, 0, 250);
+  pWin.pBar.preferredSize = [250, 10];
   app.userInteractionLevel = UserInteractionLevel.DISPLAYALERTS;
   doc = app.activeDocument;
   org = doc.rulerOrigin;
@@ -245,7 +245,7 @@ ai2assBackend = function(options) {
       for (i = _i = 0, _len = allThePaths.length; _i < _len; i = ++_i) {
         path = allThePaths[i];
         output.appendPath(path);
-        pWin.pBar.value = Math.ceil(i * 1000 / allThePaths.length);
+        pWin.pBar.value = Math.ceil(i * 250 / allThePaths.length);
         pWin.update();
       }
       output.append(output.suffix());
@@ -262,18 +262,12 @@ ai2assBackend = function(options) {
       return this.common();
     },
     CG_collectActiveLayer: function() {
-      var pageItem, _i, _len, _ref;
       output.appendPath = function(path) {
         if (!(path.hidden || path.guides || path.clipping || !(path.stroked || path.filled))) {
           return this.append(CG_createDrawingFromPoints(path.pathPoints));
         }
       };
-      _ref = currLayer.pageItems;
-      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-        pageItem = _ref[_i];
-        recursePageItem(pageItem, output);
-      }
-      return this.common();
+      return this.collectActiveLayer();
     },
     collectInnerShadow: function() {
       var currPath, glyphPaths, glyphStr, group, outerGroup, outlinePaths, outlineStr, outputStr, _i, _j, _k, _l, _len, _len1, _len2, _len3, _ref, _ref1;
