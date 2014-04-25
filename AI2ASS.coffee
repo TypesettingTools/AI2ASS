@@ -5,16 +5,44 @@ ai2assBackend = ( options ) ->
   currLayer = doc.activeLayer
   drawCom = 0
 
+  output = {
+    str: ""
+    lastFill: ""
+    lastStroke: ""
+    append: ( toAppend ) ->
+      @str += toAppend
 
+    init: ( path ) ->
+      @lastFill = manageColor path, "fillColor", 1
+      @lastStroke = manageColor path, "strokeColor", 3
 
+      @append @prefix( )
 
+    split: options.split or ( path ) ->
+      fillColor = manageColor path, "fillColor", 1
+      strokeColor = manageColor path, "strokeColor", 3
 
+      fillChange = fillColor isnt @lastFill
+      strokeChange = strokeColor isnt @lastStroke
 
+      if fillChange or strokeChange
+        @lastFill = fillColor
+        @lastStroke = strokeColor
 
+        @append "#{@suffix( )}\n#{@prefix( )}"
 
+    appendPath: ( path ) ->
+      unless path.hidden or path.guides or path.clipping or not (path.stroked or path.filled)
+        @split( path )
+        @append ASS_createDrawingFromPoints path.pathPoints
 
+    prefix: -> "{\\an7\\pos(0,0)#{@lastStroke}#{@lastFill}\\p1}"
 
+    suffix: -> "{\\p0}"
 
+    merge: ->
+      @str # cleanup everywher
+  }
 
 
   alert "Your colorspace needs to be RGB if you want colors." if doc.documentColorSpace == DocumentColorSpace.CMYK
@@ -171,9 +199,15 @@ ai2assBackend = ( options ) ->
         alert pageItem.typename
 
   methods = {
+    common: ->
 
+      output.init( allThePaths[0] )
 
+      for path, i in allThePaths
+        output.appendPath path
 
+      output.append output.suffix( )
+      output.merge( )
 
     collectActiveLayer: ->
 
@@ -187,14 +221,18 @@ ai2assBackend = ( options ) ->
       for pageItem in currLayer.pageItems
         recursePageItem pageItem, output
 
+      @common( )
 
     CG_collectActiveLayer: ->
 
+      output.appendPath = ( path ) ->
+        unless path.hidden or path.guides or path.clipping or not (path.stroked or path.filled)
+          @append CG_createDrawingFromPoints path.pathPoints
 
       for pageItem in currLayer.pageItems
         recursePageItem pageItem, output
 
-      outputStr
+      @common( )
 
     collectInnerShadow: ->
       outputStr = ""
@@ -231,6 +269,7 @@ ai2assBackend = ( options ) ->
     collectAllLayers: ->
 
       allThePaths = doc.pathItems
+      @common( )
 
   }
 
