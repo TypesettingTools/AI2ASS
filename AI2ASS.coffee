@@ -44,6 +44,16 @@ ai2assBackend = ( options ) ->
       @str # cleanup everywher
   }
 
+  switch options.wrapper
+    when "clip"
+      output.prefix = -> "\\clip("
+      output.suffix = -> ")"
+    when "iclip"
+      output.prefix = -> "\\iclip("
+      output.suffix = -> ")"
+    when "bare"
+      output.prefix = -> ""
+      output.suffix = -> ""
 
   alert "Your colorspace needs to be RGB if you want colors." if doc.documentColorSpace == DocumentColorSpace.CMYK
 
