@@ -1,7 +1,7 @@
 ai2assBackend = ( options ) ->
   pWin = new Window "palette"
-  pWin.pBar = pWin.add "progressbar", undefined, 0, 1000
-  pWin.pBar.preferredSize = [ 300, 15 ]
+  pWin.pBar = pWin.add "progressbar", undefined, 0, 250
+  pWin.pBar.preferredSize = [ 250, 10 ]
   app.userInteractionLevel = UserInteractionLevel.DISPLAYALERTS
   doc = app.activeDocument
   org = doc.rulerOrigin
@@ -219,7 +219,7 @@ ai2assBackend = ( options ) ->
 
       for path, i in allThePaths
         output.appendPath path
-        pWin.pBar.value = Math.ceil i*1000/allThePaths.length
+        pWin.pBar.value = Math.ceil i*250/allThePaths.length
         pWin.update( )
 
       output.append output.suffix( )
