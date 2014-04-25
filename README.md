@@ -34,11 +34,8 @@ be to slow to run on their setup anyway.
 
 ### Great, but how do I run it? ###
 
-Place [`AI2ASS Combined.jsx`][rawcomb] in your Illustrator
-scripts folder. This is the easier way.
-
-Alternately, place both [`AI2ASS.jsxinc`][raw] and [`AI2ASS
-UI.jsx`][rawui] in your Illustrator scripts folder.
+Place [`AI2ASS.jsx`][raw] in your Illustrator
+scripts folder.
 
 On OS X, the scripts folder should be something like
 `/Applications/Adobe Illustrator CS6/Presets/en_US/Scripts`.
@@ -47,16 +44,14 @@ On Windows, it'll be `C:\Program Files\Adobe\Adobe Illustrator CS6 (64
 Bit)\Presets\en_US\Scripts` , assuming you're running the 64-bit version
 (thanks, __ar).
 
-If you installed [`AI2ASS Combined.jsx`][rawcomb], it should appear in
-the menu as `File > Scripts > AI2ASS Combined`. Running this will pop up
-a persistent window with a button you can click to convert the active
-layer into an ASS drawing. You don't need to close this ever. It's neat.
+If you launch Illustrator, the script should now appear in the menu as
+`File > Scripts > AI2ASS`. Running this will pop up a persistent window
+with a button you can click to convert the active layer into an ASS
+drawing. You don't need to close this ever. It's neat.
 
-If you chose to install both of the other scripts instead, you'll have
-to run the script using the Extendscript Toolkit, which may or may not
-be installed by default. This is due to what appears to be a bug with
-the `#include` preprocessor directive which, for some reason, causes the
-window to disappear instantly when the script is not run from the ESTK.
+[`AI2ASS.jsxinc`][rawlib] is provided as a library in case someone wants
+to use this without the UI. Maybe eventually I will write documentation
+about this. Normal people don't need it.
 
 #### WARNING: SHIT MOVES SLOW WHEN YOU HAVE A LOT OF STUFF GOING ON ####
 
@@ -88,7 +83,6 @@ The effect looks something like this:
 - AINT NOTHIN THIS IS PERFECT
 
 [screenshit]: https://raw.github.com/torque/AI2ASS/master/screenshot.png
-[raw]: https://raw.github.com/torque/AI2ASS/master/built/AI2ASS.jsxinc
-[rawui]: https://raw.github.com/torque/AI2ASS/master/built/AI2ASS%20UI.jsx
-[rawcomb]: https://raw.github.com/torque/AI2ASS/master/built/AI2ASS%20Combined.jsx
+[rawlib]: https://raw.github.com/torque/AI2ASS/master/built/AI2ASS.jsxinc
+[raw]: https://raw.github.com/torque/AI2ASS/master/built/AI2ASS.jsx
 [innerShadow]: https://raw.github.com/torque/AI2ASS/master/innershadow.png

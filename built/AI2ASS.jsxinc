@@ -15,28 +15,33 @@ ai2assBackend = function(options) {
     str: "",
     lastFill: "",
     lastStroke: "",
+    lastLayer: "",
     append: function(toAppend) {
       return this.str += toAppend;
     },
     init: function(path) {
       this.lastFill = manageColor(path, "fillColor", 1);
       this.lastStroke = manageColor(path, "strokeColor", 3);
+      this.lastLayer = path.layer.name;
       return this.append(this.prefix());
     },
     split: options.split || function(path) {
-      var fillChange, fillColor, strokeChange, strokeColor;
+      var fillChange, fillColor, layerChange, layerName, strokeChange, strokeColor;
       fillColor = manageColor(path, "fillColor", 1);
       strokeColor = manageColor(path, "strokeColor", 3);
+      layerName = path.layer.name;
       fillChange = fillColor !== this.lastFill;
       strokeChange = strokeColor !== this.lastStroke;
-      if (fillChange || strokeChange) {
+      layerChange = layerName !== this.lastLayer;
+      if (fillChange || strokeChange || layerChange) {
         this.lastFill = fillColor;
         this.lastStroke = strokeColor;
+        this.lastLayer = layerName;
         return this.append("" + (this.suffix()) + "\n" + (this.prefix()));
       }
     },
     appendPath: function(path) {
-      if (!(path.hidden || path.guides || path.clipping || !(path.stroked || path.filled))) {
+      if (!(path.hidden || path.guides || path.clipping || !(path.stroked || path.filled) || !path.layer.visible)) {
         this.split(path);
         return this.append(ASS_createDrawingFromPoints(path.pathPoints));
       }
@@ -254,6 +259,9 @@ ai2assBackend = function(options) {
     },
     collectActiveLayer: function() {
       var pageItem, _i, _len, _ref;
+      if (!currLayer.visible) {
+        return "Not doing anything to that invisible layer.";
+      }
       _ref = currLayer.pageItems;
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
         pageItem = _ref[_i];
