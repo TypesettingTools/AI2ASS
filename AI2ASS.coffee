@@ -152,32 +152,47 @@ ai2assBackend = ( options ) ->
 
     return ""
 
+  allThePaths = []
+  recursePageItem = ( pageItem ) ->
+    switch pageItem.typename
+
+      when "CompoundPathItem"
+        for path in pageItem.pathItems
+          recursePageItem path
+
+      when "GroupItem"
+        for subPageItem in pageItem.pageItems
+          recursePageItem subPageItem
+
+      when "PathItem"
+        allThePaths.push pageItem
+
+      else
+        alert pageItem.typename
+
   methods = {
+
+
+
+
     collectActiveLayer: ->
-      outputStr = ""
 
-      for currPath in doc.pathItems
+      # PAGEITEMS DOES NOT INCLUDE SUBLAYERS, AND AS FAR AS I CAN TELL,
+      # THERE'S NO WAY TO POSSIBLY TELL FROM JS WHAT ORDER SUBLAYERS ARE
+      # IN RELATIVE TO THE PATHS, COMPOUND PATHS, AND GROUPS WITHIN THE
+      # LAYER, WHICH MEANS IT IS IMPOSSIBLE TO REPRODUCE THE WAY
+      # SUBLAYERS ARE LAYERED. TL;DR IF YOU STICK A LAYER INSIDE ANOTHER
+      # LAYER, FUCK YOU FOREVER.
 
-        if currPath.layer.name is currLayer.name
+      for pageItem in currLayer.pageItems
+        recursePageItem pageItem, output
 
-          unless currPath.hidden or currPath.guides or currPath.clipping
-
-            if outputStr.length is 0
-              fgc = manageColor currPath, "fillColor", 1
-              sc = manageColor currPath, "strokeColor", 3
-              outputStr += "{\\pos(0,0)#{fgc}#{sc}\\p#{options.scale}}"
-
-            outputStr += ASS_createDrawingFromPoints currPath.pathPoints
-
-      outputStr[0...-1]
 
     CG_collectActiveLayer: ->
-      outputStr = ""
 
-      for currPath in doc.pathItems
 
-        if currPath.layer.name is currLayer.name
-          outputStr += CG_createDrawingFromPoints currPath.pathPoints
+      for pageItem in currLayer.pageItems
+        recursePageItem pageItem, output
 
       outputStr
 
@@ -207,29 +222,9 @@ ai2assBackend = ( options ) ->
       "{innerShadow}\n#{outputStr}"[0...-2]
 
     collectAllLayers: ->
-      output = {}
-      overall = ""
 
-      for currPath in doc.pathItems
+      allThePaths = doc.pathItems
 
-        unless currPath.hidden or currPath.guides or currPath.clipping or not currPath.layer.visible
-          outputStr = ""
-          outputStr += ASS_createDrawingFromPoints currPath.pathPoints
-
-          unless output[currPath.layer.name]
-            fgc = manageColor currPath, "fillColor", 1
-            sc = manageColor currPath, "strokeColor", 3
-            outputStr = "{\\pos(0,0)#{fgc}#{sc}\\p#{options.scale}}#{outputStr}"
-            output[currPath.layer.name] = outputStr
-          else
-            output[currPath.layer.name] += outputStr
-
-      for key, val of output
-        overall += "#{val[0...-1]}\n"
-
-      "{allLayers}\n#{overall}"[0...-2]
   }
 
-  methods[options.method]()
-
-win.show()
+  methods[options.method]( )
