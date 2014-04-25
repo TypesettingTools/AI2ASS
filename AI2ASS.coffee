@@ -246,10 +246,7 @@ ai2assBackend = ( options ) ->
         unless path.hidden or path.guides or path.clipping or not (path.stroked or path.filled)
           @append CG_createDrawingFromPoints path.pathPoints
 
-      for pageItem in currLayer.pageItems
-        recursePageItem pageItem, output
-
-      @common( )
+      @collectActiveLayer( )
 
     collectInnerShadow: ->
       outputStr = ""
