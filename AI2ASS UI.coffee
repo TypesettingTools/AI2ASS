@@ -1,6 +1,5 @@
 `#target illustrator`
 `#targetengine main`
-`#include "./ai2ass.jsxinc"`
 
 win = new Window "palette", "Export ASS" , undefined, {}
 
