@@ -1,4 +1,7 @@
 ai2assBackend = ( options ) ->
+  pWin = new Window "palette"
+  pWin.pBar = pWin.add "progressbar", undefined, 0, 1000
+  pWin.pBar.preferredSize = [ 300, 15 ]
   app.userInteractionLevel = UserInteractionLevel.DISPLAYALERTS
   doc = app.activeDocument
   org = doc.rulerOrigin
@@ -167,7 +170,7 @@ ai2assBackend = ( options ) ->
 
   CG_createDrawingFromPoints = ( pathPoints ) ->
     drawStr = ""
-
+    # I don't actually know how you end up with a path with 0 elements.
     if pathPoints.length > 0
       drawStr += "CGContextMoveToPoint(ctx, #{CG_fixCoords pathPoints[0].anchor});\n"
 
@@ -211,12 +214,16 @@ ai2assBackend = ( options ) ->
   methods = {
     common: ->
 
+      pWin.show( )
       output.init( allThePaths[0] )
 
       for path, i in allThePaths
         output.appendPath path
+        pWin.pBar.value = Math.ceil i*1000/allThePaths.length
+        pWin.update( )
 
       output.append output.suffix( )
+      pWin.close( )
       output.merge( )
 
     collectActiveLayer: ->
