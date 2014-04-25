@@ -198,11 +198,18 @@ ai2assBackend = ( options ) ->
 
     collectInnerShadow: ->
       outputStr = ""
-      clipStart = if options.scale is 1 then "" else "#{options.scale},"
+
+      if currLayer.groupItems.length is 0
+        return "Layer formatting not as expected."
 
       for outerGroup in currLayer.groupItems
+        if outerGroup.groupItems.length is 0
+          return "Layer formatting not as expected."
 
         for group in outerGroup.groupItems
+          if group.compoundPathItems.length is 0
+            return "Layer formatting not as expected."
+
           outlinePaths = group.compoundPathItems[0].pathItems
           outlineStr = ""
           glyphPaths = group.compoundPathItems[1].pathItems
@@ -215,8 +222,8 @@ ai2assBackend = ( options ) ->
             outlineStr += ASS_createDrawingFromPoints currPath.pathPoints
 
           glyphStr = glyphStr[0...-1]
-          outlineStr = "{\\clip(#{clipStart}#{glyphStr})\\p#{options.scale}}#{outlineStr[0...-1]}"
-          glyphStr = "{\\p#{options.scale}}#{glyphStr}"
+          outlineStr = "{\\clip(#{glyphStr})\\p1}#{outlineStr[0...-1]}"
+          glyphStr = "{\\p1}#{glyphStr}"
           outputStr += "#{glyphStr}\n#{outlineStr}\n"
 
       "{innerShadow}\n#{outputStr}"[0...-2]
