@@ -4,6 +4,7 @@ var ai2assBackend;
 ai2assBackend = function(options) {
   var ASS_createDrawingFromPoints, ASS_cubic, ASS_fixCoords, ASS_linear, CG_createDrawingFromPoints, CG_cubic, CG_fixCoords, CG_linear, allThePaths, checkLinear, currLayer, doc, drawCom, handleGray, handleRGB, manageColor, methods, org, output, pWin, recursePageItem, zeroPad;
   pWin = new Window("palette");
+  pWin.text = "Progress Occurs";
   pWin.pBar = pWin.add("progressbar", void 0, 0, 250);
   pWin.pBar.preferredSize = [250, 10];
   app.userInteractionLevel = UserInteractionLevel.DISPLAYALERTS;
@@ -37,20 +38,22 @@ ai2assBackend = function(options) {
         this.lastFill = fillColor;
         this.lastStroke = strokeColor;
         this.lastLayer = layerName;
+        this.splitClean();
         return this.append("" + (this.suffix()) + "\n" + (this.prefix()));
       }
     },
     appendPath: function(path) {
-      if (!(path.hidden || path.guides || path.clipping || !(path.stroked || path.filled) || !path.layer.visible)) {
-        this.split(path);
-        return this.append(ASS_createDrawingFromPoints(path.pathPoints));
-      }
+      this.split(path);
+      return this.append(ASS_createDrawingFromPoints(path.pathPoints));
     },
     prefix: function() {
       return "{\\an7\\pos(0,0)" + this.lastStroke + this.lastFill + "\\p1}";
     },
     suffix: function() {
       return "{\\p0}";
+    },
+    splitClean: function() {
+      return this.str = this.str.slice(0, -1);
     },
     merge: function() {
       return this.str;
@@ -217,29 +220,31 @@ ai2assBackend = function(options) {
   allThePaths = [];
   recursePageItem = function(pageItem) {
     var path, subPageItem, _i, _j, _len, _len1, _ref, _ref1, _results, _results1;
-    switch (pageItem.typename) {
-      case "CompoundPathItem":
-        _ref = pageItem.pathItems;
-        _results = [];
-        for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-          path = _ref[_i];
-          _results.push(recursePageItem(path));
-        }
-        return _results;
-        break;
-      case "GroupItem":
-        _ref1 = pageItem.pageItems;
-        _results1 = [];
-        for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
-          subPageItem = _ref1[_j];
-          _results1.push(recursePageItem(subPageItem));
-        }
-        return _results1;
-        break;
-      case "PathItem":
-        return allThePaths.push(pageItem);
-      default:
-        return alert(pageItem.typename);
+    if (!pageItem.hidden) {
+      switch (pageItem.typename) {
+        case "CompoundPathItem":
+          _ref = pageItem.pathItems;
+          _results = [];
+          for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+            path = _ref[_i];
+            _results.push(recursePageItem(path));
+          }
+          return _results;
+          break;
+        case "GroupItem":
+          _ref1 = pageItem.pageItems;
+          _results1 = [];
+          for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
+            subPageItem = _ref1[_j];
+            _results1.push(recursePageItem(subPageItem));
+          }
+          return _results1;
+          break;
+        case "PathItem":
+          if (!(pageItem.guides || pageItem.clipping || !(pageItem.stroked || pageItem.filled) || !pageItem.layer.visible)) {
+            return allThePaths.push(pageItem);
+          }
+      }
     }
   };
   methods = {
@@ -250,11 +255,13 @@ ai2assBackend = function(options) {
       for (i = _i = 0, _len = allThePaths.length; _i < _len; i = ++_i) {
         path = allThePaths[i];
         output.appendPath(path);
-        pWin.pBar.value = Math.ceil(i * 250 / allThePaths.length);
+        pWin.pBar.value = Math.ceil(i * 250 / (allThePaths.length - 1));
         pWin.update();
       }
+      output.splitClean();
       output.append(output.suffix());
       pWin.close();
+      allThePaths = [];
       return output.merge();
     },
     collectActiveLayer: function() {
@@ -265,7 +272,7 @@ ai2assBackend = function(options) {
       _ref = currLayer.pageItems;
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
         pageItem = _ref[_i];
-        recursePageItem(pageItem, output);
+        recursePageItem(pageItem);
       }
       return this.common();
     },
@@ -316,8 +323,36 @@ ai2assBackend = function(options) {
       return ("{innerShadow}\n" + outputStr).slice(0, -2);
     },
     collectAllLayers: function() {
-      allThePaths = doc.pathItems;
+      var layer, pageItem, _i, _j, _len, _len1, _ref, _ref1;
+      _ref = doc.layers;
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        layer = _ref[_i];
+        _ref1 = layer.pageItems;
+        for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
+          pageItem = _ref1[_j];
+          recursePageItem(pageItem);
+        }
+      }
       return this.common();
+    },
+    giveMeASeizure: function() {
+      var layer, _i, _len, _ref;
+      output.merge = function() {
+        return this.append("\n");
+      };
+      pWin.label = pWin.add("statictext", void 0, "");
+      _ref = doc.layers;
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        layer = _ref[_i];
+        currLayer = layer;
+        pWin.label.text = "Layer: " + currLayer.name;
+        if (currLayer.pageItems.length !== 0 && currLayer.visible) {
+          this.collectActiveLayer();
+        } else if (currLayer.pageItems.length === 0) {
+          output.append("\n");
+        }
+      }
+      return output.str;
     }
   };
   return methods[options.method]();

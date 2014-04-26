@@ -1,5 +1,6 @@
 ai2assBackend = ( options ) ->
   pWin = new Window "palette"
+  pWin.text = "Progress Occurs"
   pWin.pBar = pWin.add "progressbar", undefined, 0, 250
   pWin.pBar.preferredSize = [ 250, 10 ]
   app.userInteractionLevel = UserInteractionLevel.DISPLAYALERTS
@@ -37,19 +38,23 @@ ai2assBackend = ( options ) ->
         @lastStroke = strokeColor
         @lastLayer = layerName
 
+        @splitClean( )
         @append "#{@suffix( )}\n#{@prefix( )}"
 
     appendPath: ( path ) ->
-      unless path.hidden or path.guides or path.clipping or not (path.stroked or path.filled) or not path.layer.visible
-        @split( path )
-        @append ASS_createDrawingFromPoints path.pathPoints
+      @split( path )
+      @append ASS_createDrawingFromPoints path.pathPoints
 
     prefix: -> "{\\an7\\pos(0,0)#{@lastStroke}#{@lastFill}\\p1}"
 
     suffix: -> "{\\p0}"
 
+    splitClean: ->
+      @str = @str[0..-2]
+
     merge: ->
       @str # cleanup everywher
+
   }
 
   switch options.wrapper
@@ -200,35 +205,37 @@ ai2assBackend = ( options ) ->
 
   allThePaths = []
   recursePageItem = ( pageItem ) ->
-    switch pageItem.typename
+    unless pageItem.hidden
+      switch pageItem.typename
 
-      when "CompoundPathItem"
-        for path in pageItem.pathItems
-          recursePageItem path
+        when "CompoundPathItem"
+          for path in pageItem.pathItems
+            recursePageItem path
 
-      when "GroupItem"
-        for subPageItem in pageItem.pageItems
-          recursePageItem subPageItem
+        when "GroupItem"
+          for subPageItem in pageItem.pageItems
+            recursePageItem subPageItem
 
-      when "PathItem"
-        allThePaths.push pageItem
-
-      else
-        alert pageItem.typename
+        when "PathItem"
+          unless pageItem.guides or pageItem.clipping or not (pageItem.stroked or pageItem.filled) or not pageItem.layer.visible
+            allThePaths.push pageItem
 
   methods = {
     common: ->
 
       pWin.show( )
+
       output.init( allThePaths[0] )
 
       for path, i in allThePaths
         output.appendPath path
-        pWin.pBar.value = Math.ceil i*250/allThePaths.length
+        pWin.pBar.value = Math.ceil i*250/(allThePaths.length-1)
         pWin.update( )
 
+      output.splitClean( )
       output.append output.suffix( )
       pWin.close( )
+      allThePaths = []
       output.merge( )
 
     collectActiveLayer: ->
@@ -243,7 +250,7 @@ ai2assBackend = ( options ) ->
         return "Not doing anything to that invisible layer."
 
       for pageItem in currLayer.pageItems
-        recursePageItem pageItem, output
+        recursePageItem pageItem
 
       @common( )
 
@@ -289,9 +296,28 @@ ai2assBackend = ( options ) ->
 
     collectAllLayers: ->
 
-      allThePaths = doc.pathItems
+      for layer in doc.layers
+        for pageItem in layer.pageItems
+          recursePageItem pageItem
+
       @common( )
 
+    giveMeASeizure: ->
+      output.merge = ->
+        @append "\n"
+
+      pWin.label = pWin.add "statictext", undefined, ""
+
+      for layer in doc.layers
+        currLayer = layer
+        pWin.label.text = "Layer: #{currLayer.name}"
+
+        if currLayer.pageItems.length isnt 0 and currLayer.visible
+          @collectActiveLayer( )
+        else if currLayer.pageItems.length is 0
+          output.append "\n"
+
+      output.str
   }
 
   methods[options.method]( )
