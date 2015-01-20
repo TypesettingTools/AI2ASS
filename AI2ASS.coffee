@@ -21,6 +21,7 @@ ai2assBackend = ( options ) ->
       @lastFill = manageColor path, "fillColor", 1
       @lastStroke = manageColor path, "strokeColor", 3
       @lastLayer = path.layer.name
+      @lastLayerNum = path.layer.zOrderPosition
 
       @append @prefix( )
 
@@ -28,6 +29,7 @@ ai2assBackend = ( options ) ->
       fillColor = manageColor path, "fillColor", 1
       strokeColor = manageColor path, "strokeColor", 3
       layerName = path.layer.name
+      layerNum = path.layer.zOrderPosition
 
       fillChange = fillColor isnt @lastFill
       strokeChange = strokeColor isnt @lastStroke
@@ -37,6 +39,7 @@ ai2assBackend = ( options ) ->
         @lastFill = fillColor
         @lastStroke = strokeColor
         @lastLayer = layerName
+        @lastLayerNum = layerNum
 
         @splitClean( )
         @append "#{@suffix( )}\n#{@prefix( )}"
@@ -67,6 +70,10 @@ ai2assBackend = ( options ) ->
     when "bare"
       output.prefix = -> ""
       output.suffix = -> ""
+    when "line"
+      output.prefix = -> "Dialogue: #{@lastLayerNum},0:00:00.00,0:00:00.00,AI,#{@lastLayer},0,0,0,,{\\an7\\pos(0,0)#{@lastStroke}#{@lastFill}\\p1}"
+      output.suffix = -> ""
+
 
   alert "Your colorspace needs to be RGB if you want colors." if doc.documentColorSpace == DocumentColorSpace.CMYK
 

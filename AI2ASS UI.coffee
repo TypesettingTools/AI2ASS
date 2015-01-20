@@ -3,17 +3,21 @@
 
 win = new Window "palette", "Export ASS" , undefined, {}
 
-win.outputBox = win.add "edittext", [0, 0, 250, 80], "", {multiline: true}
+win.outputBox = win.add "edittext", [0, 0, 280, 80], "", {multiline: true}
 win.outputBox.graphics.font = "Comic Sans MS:12"
 win.outputBox.text = "have ass, will typeset"
 
-win.clip = win.add "Group {orientation: 'row', noclip: RadioButton { text: 'drawing', value: true }, clip: RadioButton { text: 'clip' }, iclip: RadioButton { text: 'iclip' }, bare: RadioButton { text: 'bare' } }"
+win.clip = win.add "Group {orientation: 'row', \
+                           noclip: RadioButton { text: 'drawing', value: true }, clip: RadioButton { text: 'clip' }, \
+                           iclip: RadioButton { text: 'iclip' }, bare: RadioButton { text: 'bare' }, \
+                           line: RadioButton { text: 'line' } \
+                   }"
 win.clip.noclip.graphics.font = "Comic Sans MS:12"
 win.clip.clip.graphics.font = "Comic Sans MS:12"
 win.clip.iclip.graphics.font = "Comic Sans MS:12"
 win.clip.bare.graphics.font = "Comic Sans MS:12"
 
-win.collectionMethod = win.add "dropdownlist", [0,0,250,20], ["collectActiveLayer","collectInnerShadow","collectAllLayers", "giveMeASeizure", "CG_collectActiveLayer"]
+win.collectionMethod = win.add "dropdownlist", [0,0,280,20], ["collectActiveLayer","collectInnerShadow","collectAllLayers", "giveMeASeizure", "CG_collectActiveLayer"]
 win.collectionMethod.graphics.font = "Comic Sans MS:12"
 win.collectionMethod.selection = 0
 
