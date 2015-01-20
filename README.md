@@ -25,12 +25,12 @@ into one line.
 CMYK support may be added at some point in the future if I ever find a
 conversion algorithm that works properly.
 
-##### It can output shapes wrapped in {\p1}, \clip, \iclip, or output raw shape data.
+##### It can output shapes wrapped in {\p1}, \clip, \iclip, raw shape data, or complete dialogue lines.
 All output shape data uses coördinates with two decimal places of
 precision. Modern ASS renderers should be able to handle these properly.
 If you are worried about people running horribly old and terrible
 software, don't. If you're using this to do typesetting, odds are it'll
-be to slow to run on their setup anyway.
+be too slow to run on their setup anyway.
 
 ### Great, but how do I run it? ###
 
