@@ -20,7 +20,7 @@ win.clip.clip.graphics.font = "Comic Sans MS:12"
 win.clip.iclip.graphics.font = "Comic Sans MS:12"
 win.clip.bare.graphics.font = "Comic Sans MS:12"
 
-win.collectionMethod = win.add "dropdownlist", [0,0,280,20], ["collectActiveLayer","collectInnerShadow","collectAllLayers", "giveMeASeizure", "CG_collectActiveLayer"]
+win.collectionMethod = win.add "dropdownlist", [0,0,280,20], ["collectActiveLayer","collectInnerShadow","collectAllLayers", "giveMeASeizure"]
 win.collectionMethod.graphics.font = "Comic Sans MS:12"
 win.collectionMethod.selection = 0
 

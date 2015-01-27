@@ -1,9 +1,9 @@
 ai2assBackend = ( options ) ->
+  app.userInteractionLevel = UserInteractionLevel.DISPLAYALERTS
   pWin = new Window "palette"
   pWin.text = "Progress Occurs"
   pWin.pBar = pWin.add "progressbar", undefined, 0, 250
   pWin.pBar.preferredSize = [ 250, 10 ]
-  app.userInteractionLevel = UserInteractionLevel.DISPLAYALERTS
   doc = app.activeDocument
   org = doc.rulerOrigin
   currLayer = doc.activeLayer
@@ -83,13 +83,6 @@ ai2assBackend = ( options ) ->
     coordArr[1] = Math.round( (doc.height - (org[1] + coordArr[1]))*100 )/100
     coordArr.join " "
 
-  # for CoreGraphics, the origin is the bottom-left corner. Except on IOS
-  # where it's the top-left corner. But I don't care about IOS.
-  CG_fixCoords = ( coordArr ) ->
-    coordArr[0] = Math.round( (coordArr[0] + org[0])*100 )/100
-    coordArr[1] = Math.round( (coordArr[1] + org[1])*100 )/100
-    coordArr.join ", "
-
   checkLinear = ( currPoint, prevPoint ) ->
     p1 = (prevPoint.anchor[0] == prevPoint.rightDirection[0] && prevPoint.anchor[1] == prevPoint.rightDirection[1])
     p2 = (currPoint.anchor[0] == currPoint.leftDirection[0] && currPoint.anchor[1] == currPoint.leftDirection[1])
@@ -104,9 +97,6 @@ ai2assBackend = ( options ) ->
 
     drawing += "#{ASS_fixCoords currPoint.anchor} "
 
-  CG_linear = ( currPoint ) ->
-    "CGContextAddLineToPoint(ctx, #{CG_fixCoords currPoint.anchor});\n"
-
   ASS_cubic = ( currPoint, prevPoint ) ->
     drawing = ""
 
@@ -115,9 +105,6 @@ ai2assBackend = ( options ) ->
       drawing = "b "
 
     drawing += "#{ASS_fixCoords prevPoint.rightDirection} #{ASS_fixCoords currPoint.leftDirection} #{ASS_fixCoords currPoint.anchor} "
-
-  CG_cubic = ( currPoint, prevPoint ) ->
-    "CGContextAddCurveToPoint(ctx, #{CG_fixCoords prevPoint.rightDirection}, #{CG_fixCoords currPoint.leftDirection}, #{CG_fixCoords currPoint.anchor});\n"
 
   zeroPad = ( num ) ->
     if num < 16
@@ -185,31 +172,6 @@ ai2assBackend = ( options ) ->
 
     return ""
 
-  CG_createDrawingFromPoints = ( pathPoints ) ->
-    drawStr = ""
-    # I don't actually know how you end up with a path with 0 elements.
-    if pathPoints.length > 0
-      drawStr += "CGContextMoveToPoint(ctx, #{CG_fixCoords pathPoints[0].anchor});\n"
-
-      for j in [1...pathPoints.length] by 1
-        currPoint = pathPoints[j]
-        prevPoint = pathPoints[j-1]
-
-        if checkLinear currPoint, prevPoint
-          drawStr += CG_linear currPoint
-        else
-          drawStr += CG_cubic currPoint, prevPoint
-
-      prevPoint = pathPoints[pathPoints.length-1]
-      currPoint = pathPoints[0]
-
-      unless checkLinear currPoint, prevPoint
-        drawStr += CG_cubic currPoint, prevPoint
-
-      return drawStr
-
-    return ""
-
   allThePaths = []
   recursePageItem = ( pageItem ) ->
     unless pageItem.hidden
@@ -260,15 +222,6 @@ ai2assBackend = ( options ) ->
         recursePageItem pageItem
 
       @common( )
-
-    CG_collectActiveLayer: ->
-
-      output.appendPath = ( path ) ->
-        unless path.hidden or path.guides or path.clipping or not (path.stroked or path.filled)
-          @append CG_createDrawingFromPoints path.pathPoints
-
-      @collectActiveLayer( )
-
     collectInnerShadow: ->
       outputStr = ""
 

@@ -23,7 +23,7 @@ win.clip.iclip.graphics.font = "Comic Sans MS:12";
 
 win.clip.bare.graphics.font = "Comic Sans MS:12";
 
-win.collectionMethod = win.add("dropdownlist", [0, 0, 280, 20], ["collectActiveLayer", "collectInnerShadow", "collectAllLayers", "giveMeASeizure", "CG_collectActiveLayer"]);
+win.collectionMethod = win.add("dropdownlist", [0, 0, 280, 20], ["collectActiveLayer", "collectInnerShadow", "collectAllLayers", "giveMeASeizure"]);
 
 win.collectionMethod.graphics.font = "Comic Sans MS:12";
 
@@ -63,12 +63,12 @@ win.goButton.onClick = function() {
 win.show();
 
 ai2assBackend = function(options) {
-  var ASS_createDrawingFromPoints, ASS_cubic, ASS_fixCoords, ASS_linear, CG_createDrawingFromPoints, CG_cubic, CG_fixCoords, CG_linear, allThePaths, checkLinear, currLayer, doc, drawCom, handleGray, handleRGB, manageColor, methods, org, output, pWin, recursePageItem, zeroPad;
+  var ASS_createDrawingFromPoints, ASS_cubic, ASS_fixCoords, ASS_linear, allThePaths, checkLinear, currLayer, doc, drawCom, handleGray, handleRGB, manageColor, methods, org, output, pWin, recursePageItem, zeroPad;
+  app.userInteractionLevel = UserInteractionLevel.DISPLAYALERTS;
   pWin = new Window("palette");
   pWin.text = "Progress Occurs";
   pWin.pBar = pWin.add("progressbar", void 0, 0, 250);
   pWin.pBar.preferredSize = [250, 10];
-  app.userInteractionLevel = UserInteractionLevel.DISPLAYALERTS;
   doc = app.activeDocument;
   org = doc.rulerOrigin;
   currLayer = doc.activeLayer;
@@ -164,11 +164,6 @@ ai2assBackend = function(options) {
     coordArr[1] = Math.round((doc.height - (org[1] + coordArr[1])) * 100) / 100;
     return coordArr.join(" ");
   };
-  CG_fixCoords = function(coordArr) {
-    coordArr[0] = Math.round((coordArr[0] + org[0]) * 100) / 100;
-    coordArr[1] = Math.round((coordArr[1] + org[1]) * 100) / 100;
-    return coordArr.join(", ");
-  };
   checkLinear = function(currPoint, prevPoint) {
     var p1, p2;
     p1 = prevPoint.anchor[0] === prevPoint.rightDirection[0] && prevPoint.anchor[1] === prevPoint.rightDirection[1];
@@ -184,9 +179,6 @@ ai2assBackend = function(options) {
     }
     return drawing += "" + (ASS_fixCoords(currPoint.anchor)) + " ";
   };
-  CG_linear = function(currPoint) {
-    return "CGContextAddLineToPoint(ctx, " + (CG_fixCoords(currPoint.anchor)) + ");\n";
-  };
   ASS_cubic = function(currPoint, prevPoint) {
     var drawing;
     drawing = "";
@@ -195,9 +187,6 @@ ai2assBackend = function(options) {
       drawing = "b ";
     }
     return drawing += "" + (ASS_fixCoords(prevPoint.rightDirection)) + " " + (ASS_fixCoords(currPoint.leftDirection)) + " " + (ASS_fixCoords(currPoint.anchor)) + " ";
-  };
-  CG_cubic = function(currPoint, prevPoint) {
-    return "CGContextAddCurveToPoint(ctx, " + (CG_fixCoords(prevPoint.rightDirection)) + ", " + (CG_fixCoords(currPoint.leftDirection)) + ", " + (CG_fixCoords(currPoint.anchor)) + ");\n";
   };
   zeroPad = function(num) {
     if (num < 16) {
@@ -266,29 +255,6 @@ ai2assBackend = function(options) {
     }
     return "";
   };
-  CG_createDrawingFromPoints = function(pathPoints) {
-    var currPoint, drawStr, j, prevPoint, _i, _ref;
-    drawStr = "";
-    if (pathPoints.length > 0) {
-      drawStr += "CGContextMoveToPoint(ctx, " + (CG_fixCoords(pathPoints[0].anchor)) + ");\n";
-      for (j = _i = 1, _ref = pathPoints.length; _i < _ref; j = _i += 1) {
-        currPoint = pathPoints[j];
-        prevPoint = pathPoints[j - 1];
-        if (checkLinear(currPoint, prevPoint)) {
-          drawStr += CG_linear(currPoint);
-        } else {
-          drawStr += CG_cubic(currPoint, prevPoint);
-        }
-      }
-      prevPoint = pathPoints[pathPoints.length - 1];
-      currPoint = pathPoints[0];
-      if (!checkLinear(currPoint, prevPoint)) {
-        drawStr += CG_cubic(currPoint, prevPoint);
-      }
-      return drawStr;
-    }
-    return "";
-  };
   allThePaths = [];
   recursePageItem = function(pageItem) {
     var path, subPageItem, _i, _j, _len, _len1, _ref, _ref1, _results, _results1;
@@ -347,14 +313,6 @@ ai2assBackend = function(options) {
         recursePageItem(pageItem);
       }
       return this.common();
-    },
-    CG_collectActiveLayer: function() {
-      output.appendPath = function(path) {
-        if (!(path.hidden || path.guides || path.clipping || !(path.stroked || path.filled))) {
-          return this.append(CG_createDrawingFromPoints(path.pathPoints));
-        }
-      };
-      return this.collectActiveLayer();
     },
     collectInnerShadow: function() {
       var currPath, glyphPaths, glyphStr, group, outerGroup, outlinePaths, outlineStr, outputStr, _i, _j, _k, _l, _len, _len1, _len2, _len3, _ref, _ref1;
