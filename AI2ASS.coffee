@@ -26,7 +26,7 @@ ai2assBackend = ( options ) ->
       if not @assSections[layerNum][prefix]?
         @assSections[layerNum][prefix] = []
 
-      @assSections[layerNum][prefix].push ASS_createDrawingFromPoints path.pathPoints
+      Array.prototype.push.apply @assSections[layerNum][prefix], ASS_createDrawingFromPoints path.pathPoints
 
     prefix: (stroke, fill) -> "{\\an7\\pos(0,0)#{stroke}#{fill}\\p1}"
 
@@ -40,7 +40,7 @@ ai2assBackend = ( options ) ->
         if shapes?
           for prefix, paths of shapes
             fragments.push prefix
-            fragments.push.apply fragments, paths
+            fragments.push paths.join " "
             fragments.push suffix
             fragments.push "\n"
         else if includeEmptyLayers
@@ -48,6 +48,49 @@ ai2assBackend = ( options ) ->
 
       fragments.pop()
       return fragments.join ""
+  }
+
+  drawing = {
+    commands: []
+    new: -> @commands = []
+    get: -> return @commands
+
+    CmdTypes: {
+      None: -1
+      Move: 0
+      Linear: 1
+      Cubic: 2
+    }
+
+    prevCmdType: -1
+
+    addMove: ( point ) ->
+      @commands.push "m"
+      @addCoords point.anchor
+      @prevCmdType = @CmdTypes.Move
+
+    addLinear: ( point ) ->
+      if @prevCmdType != @CmdTypes.Linear
+        @commands.push "l"
+        @prevCmdType = @CmdTypes.Linear
+
+      @commands.push
+      @addCoords point.anchor
+
+    addCubic: (currPoint, prevPoint) ->
+      if @prevCmdType != @CmdTypes.Cubic
+        @commands.push "b"
+        @prevCmdType = @CmdTypes.Cubic
+
+      @addCoords prevPoint.rightDirection
+      @addCoords currPoint.leftDirection
+      @addCoords currPoint.anchor
+
+    # For ASS, the origin is the top-left corner
+    addCoords: ( coordArr ) ->
+      @commands.push Math.round( (coordArr[0] + org[0])*100 )/100
+      @commands.push Math.round( (doc.height - (org[1] + coordArr[1]))*100 )/100
+
   }
 
   switch options.wrapper
@@ -68,34 +111,12 @@ ai2assBackend = ( options ) ->
 
   alert "Your colorspace needs to be RGB if you want colors." if doc.documentColorSpace == DocumentColorSpace.CMYK
 
-  # For ASS, the origin is the top-left corner
-  ASS_fixCoords = ( coordArr ) ->
-    coordArr[0] = Math.round( (coordArr[0] + org[0])*100 )/100
-    coordArr[1] = Math.round( (doc.height - (org[1] + coordArr[1]))*100 )/100
-    coordArr.join " "
+
 
   checkLinear = ( currPoint, prevPoint ) ->
     p1 = (prevPoint.anchor[0] == prevPoint.rightDirection[0] && prevPoint.anchor[1] == prevPoint.rightDirection[1])
     p2 = (currPoint.anchor[0] == currPoint.leftDirection[0] && currPoint.anchor[1] == currPoint.leftDirection[1])
     (p1 && p2)
-
-  ASS_linear = ( currPoint ) ->
-    drawing = ""
-
-    if drawCom != 1
-      drawCom = 1
-      drawing = "l "
-
-    drawing += "#{ASS_fixCoords currPoint.anchor} "
-
-  ASS_cubic = ( currPoint, prevPoint ) ->
-    drawing = ""
-
-    if drawCom != 2
-      drawCom = 2
-      drawing = "b "
-
-    drawing += "#{ASS_fixCoords prevPoint.rightDirection} #{ASS_fixCoords currPoint.leftDirection} #{ASS_fixCoords currPoint.anchor} "
 
   zeroPad = ( num ) ->
     if num < 16
@@ -138,30 +159,29 @@ ai2assBackend = ( options ) ->
     # "SpotColor"
 
   ASS_createDrawingFromPoints = ( pathPoints ) ->
-    drawStr = ""
+    drawing.new()
 
     if pathPoints.length > 0
-      drawCom = 0
-      drawStr += "m #{ASS_fixCoords pathPoints[0].anchor} "
+      drawing.addMove pathPoints[0]
 
       for j in [1...pathPoints.length] by 1
         currPoint = pathPoints[j]
         prevPoint = pathPoints[j-1]
 
         if checkLinear currPoint, prevPoint
-          drawStr += ASS_linear currPoint
+          drawing.addLinear currPoint
         else
-          drawStr += ASS_cubic currPoint, prevPoint
+          drawing.addCubic currPoint, prevPoint
 
       prevPoint = pathPoints[pathPoints.length-1]
       currPoint = pathPoints[0]
 
-      unless checkLinear currPoint, prevPoint
-        drawStr += ASS_cubic currPoint, prevPoint
+      if checkLinear currPoint, prevPoint
+        drawing.addLinear currPoint
+      else
+        drawing.addCubic currPoint, prevPoint
 
-      return drawStr
-
-    return ""
+      return drawing.get()
 
   allThePaths = []
   recursePageItem = ( pageItem ) ->
