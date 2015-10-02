@@ -10,54 +10,44 @@ ai2assBackend = ( options ) ->
   drawCom = 0
 
   output = {
-    str: ""
-    lastFill: ""
-    lastStroke: ""
-    lastLayer: ""
-    append: ( toAppend ) ->
-      @str += toAppend
+    assSections: []
 
-    init: ( path ) ->
-      @lastFill = manageColor path, "fillColor", 1
-      @lastStroke = manageColor path, "strokeColor", 3
-      @lastLayer = path.layer.name
-      @lastLayerNum = path.layer.zOrderPosition
-
-      @append @prefix( )
-
-    split: options.split or ( path ) ->
-      fillColor = manageColor path, "fillColor", 1
-      strokeColor = manageColor path, "strokeColor", 3
+    appendPath: ( path ) ->
+      stroke = manageColor path, "strokeColor", 3
+      fill = manageColor path, "fillColor", 1
       layerName = path.layer.name
       layerNum = path.layer.zOrderPosition
 
-      fillChange = fillColor isnt @lastFill
-      strokeChange = strokeColor isnt @lastStroke
-      layerChange = layerName isnt @lastLayer
+      prefix = @prefix stroke, fill, layerNum, layerName
 
-      if fillChange or strokeChange or layerChange
-        @lastFill = fillColor
-        @lastStroke = strokeColor
-        @lastLayer = layerName
-        @lastLayerNum = layerNum
+      if not @assSections[layerNum]?
+        @assSections[layerNum] = {}
 
-        @splitClean( )
-        @append "#{@suffix( )}\n#{@prefix( )}"
+      if not @assSections[layerNum][prefix]?
+        @assSections[layerNum][prefix] = []
 
-    appendPath: ( path ) ->
-      @split( path )
-      @append ASS_createDrawingFromPoints path.pathPoints
+      @assSections[layerNum][prefix].push ASS_createDrawingFromPoints path.pathPoints
 
-    prefix: -> "{\\an7\\pos(0,0)#{@lastStroke}#{@lastFill}\\p1}"
+    prefix: (stroke, fill) -> "{\\an7\\pos(0,0)#{stroke}#{fill}\\p1}"
 
     suffix: -> "{\\p0}"
 
-    splitClean: ->
-      @str = @str[0..-2]
+    get: (includeEmptyLayers = false) ->
+      fragments = []
+      suffix = @suffix()
 
-    merge: ->
-      @str # cleanup everywher
+      for shapes, layerNum in @assSections
+        if shapes?
+          for prefix, paths of shapes
+            fragments.push prefix
+            fragments.push.apply fragments, paths
+            fragments.push suffix
+            fragments.push "\n"
+        else if includeEmptyLayers
+            fragments.push "\n"
 
+      fragments.pop()
+      return fragments.join ""
   }
 
   switch options.wrapper
@@ -71,7 +61,8 @@ ai2assBackend = ( options ) ->
       output.prefix = -> ""
       output.suffix = -> ""
     when "line"
-      output.prefix = -> "Dialogue: #{@lastLayerNum},0:00:00.00,0:00:00.00,AI,#{@lastLayer},0,0,0,,{\\an7\\pos(0,0)#{@lastStroke}#{@lastFill}\\p1}"
+      output.prefix = (stroke, fill, layerNum, layerName) ->
+        "Dialogue: #{layerNum},0:00:00.00,0:00:00.00,AI,#{layerName},0,0,0,,{\\an7\\pos(0,0)#{stroke}#{fill}\\p1}"
       output.suffix = -> ""
 
 
@@ -191,21 +182,15 @@ ai2assBackend = ( options ) ->
 
   methods = {
     common: ->
-
       pWin.show( )
-
-      output.init( allThePaths[0] )
 
       for path, i in allThePaths
         output.appendPath path
         pWin.pBar.value = Math.ceil i*250/(allThePaths.length-1)
         pWin.update( )
 
-      output.splitClean( )
-      output.append output.suffix( )
       pWin.close( )
       allThePaths = []
-      output.merge( )
 
     collectActiveLayer: ->
 
@@ -222,6 +207,8 @@ ai2assBackend = ( options ) ->
         recursePageItem pageItem
 
       @common( )
+      return output.get()
+
     collectInnerShadow: ->
       outputStr = ""
 
@@ -261,23 +248,20 @@ ai2assBackend = ( options ) ->
           recursePageItem pageItem
 
       @common( )
+      return output.get()
 
     giveMeASeizure: ->
-      output.merge = ->
-        @append "\n"
 
       pWin.label = pWin.add "statictext", undefined, ""
 
       for layer in doc.layers
-        currLayer = layer
-        pWin.label.text = "Layer: #{currLayer.name}"
+        pWin.label.text = "Layer: #{layer.name}"
 
-        if currLayer.pageItems.length isnt 0 and currLayer.visible
-          @collectActiveLayer( )
-        else if currLayer.pageItems.length is 0
-          output.append "\n"
+        for pageItem in layer.pageItems
+          recursePageItem pageItem
 
-      output.str
+      @common( )
+      return output.get()
   }
 
   methods[options.method]( )
