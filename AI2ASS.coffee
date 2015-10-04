@@ -9,16 +9,72 @@ ai2assBackend = ( options ) ->
   currLayer = doc.activeLayer
   drawCom = 0
 
+  countPathItems = ( obj ) ->
+    recurse = ( obj ) ->
+      unless obj.hidden
+        switch obj.typename
+          when "Document"
+            recurse layer for layer in obj.layers
+          when "Layer", "GroupItem"
+            recurse pageItem for pageItem in obj.pageItems
+          when "CompoundPathItem"
+            recurse path for path in obj.pathItems
+          when "PathItem"
+            count += 1
+
+    count = 0
+    recurse obj
+    return count
+
   output = {
+    pathCnt: null
+    processedPathCnt: 0
+
     assSections: []
 
-    appendPath: ( path ) ->
+    process: ( obj, clip ) ->
+      if not @pathCnt?
+        @pathCnt = countPathItems obj
+
+      unless obj.hidden
+        switch obj.typename
+          when "Document"
+            for layer in obj.layers
+              @process layer
+
+          when "Layer"
+            for subPageItem in obj.pageItems
+              @process subPageItem
+
+          when "CompoundPathItem"
+            for path in obj.pathItems
+              @process path, clip
+
+          when "GroupItem"
+            if obj.clipped
+              clipPath = (pI for pI in obj.pageItems when pI.clipping)[0]
+              clip = ASS_createDrawingFromPoints(clipPath.pathPoints).join(" ")
+              @processedPathCnt += 1
+            for subPageItem in obj.pageItems when not subPageItem.clipping
+              @process subPageItem, clip
+
+          when "PathItem"
+            if @processedPathCnt % 10 == 0
+              pWin.pBar.value = Math.ceil @processedPathCnt*250/@pathCnt
+              pWin.update( )
+
+            unless obj.guides or not (obj.stroked or obj.filled or obj.clipping) or not obj.layer.visible
+              @appendPath obj, clip
+
+            @processedPathCnt += 1
+
+    appendPath: ( path, clip ) ->
       stroke = manageColor path, "strokeColor", 3
       fill = manageColor path, "fillColor", 1
       layerName = path.layer.name
       layerNum = path.layer.zOrderPosition
 
-      prefix = @prefix stroke, fill, layerNum, layerName
+      prefix = @prefix stroke, fill, clip, layerNum, layerName
 
       if not @assSections[layerNum]?
         @assSections[layerNum] = {}
@@ -28,7 +84,9 @@ ai2assBackend = ( options ) ->
 
       Array.prototype.push.apply @assSections[layerNum][prefix], ASS_createDrawingFromPoints path.pathPoints
 
-    prefix: (stroke, fill) -> "{\\an7\\pos(0,0)#{stroke}#{fill}\\p1}"
+    prefix: (stroke, fill, clip) ->
+      clipTag = if clip? then "\\clip(#{clip})" else ""
+      "{\\an7\\pos(0,0)#{stroke}#{fill}#{clipTag}\\p1}"
 
     suffix: -> "{\\p0}"
 
@@ -104,8 +162,9 @@ ai2assBackend = ( options ) ->
       output.prefix = -> ""
       output.suffix = -> ""
     when "line"
-      output.prefix = (stroke, fill, layerNum, layerName) ->
-        "Dialogue: #{layerNum},0:00:00.00,0:00:00.00,AI,#{layerName},0,0,0,,{\\an7\\pos(0,0)#{stroke}#{fill}\\p1}"
+      output.prefix = (stroke, fill, clip, layerNum, layerName) ->
+        clipTag = if clip? then "\\clip(#{clip})" else ""
+        "Dialogue: #{layerNum},0:00:00.00,0:00:00.00,AI,#{layerName},0,0,0,,{\\an7\\pos(0,0)#{stroke}#{fill}#{clipTag}\\p1}"
       output.suffix = -> ""
 
 
@@ -183,35 +242,7 @@ ai2assBackend = ( options ) ->
 
       return drawing.get()
 
-  allThePaths = []
-  recursePageItem = ( pageItem ) ->
-    unless pageItem.hidden
-      switch pageItem.typename
-
-        when "CompoundPathItem"
-          for path in pageItem.pathItems
-            recursePageItem path
-
-        when "GroupItem"
-          for subPageItem in pageItem.pageItems
-            recursePageItem subPageItem
-
-        when "PathItem"
-          unless pageItem.guides or pageItem.clipping or not (pageItem.stroked or pageItem.filled) or not pageItem.layer.visible
-            allThePaths.push pageItem
-
   methods = {
-    common: ->
-      pWin.show( )
-
-      for path, i in allThePaths
-        output.appendPath path
-        pWin.pBar.value = Math.ceil i*250/(allThePaths.length-1)
-        pWin.update( )
-
-      pWin.close( )
-      allThePaths = []
-
     collectActiveLayer: ->
 
       # PAGEITEMS DOES NOT INCLUDE SUBLAYERS, AND AS FAR AS I CAN TELL,
@@ -223,10 +254,10 @@ ai2assBackend = ( options ) ->
       unless currLayer.visible
         return "Not doing anything to that invisible layer."
 
-      for pageItem in currLayer.pageItems
-        recursePageItem pageItem
+      pWin.show( )
+      output.process currLayer
+      pWin.close( )
 
-      @common( )
       return output.get()
 
     collectInnerShadow: ->
@@ -262,26 +293,18 @@ ai2assBackend = ( options ) ->
       "{innerShadow}\n#{outputStr}"[0...-2]
 
     collectAllLayers: ->
+      pWin.show( )
+      output.process doc
+      pWin.close( )
 
-      for layer in doc.layers
-        for pageItem in layer.pageItems
-          recursePageItem pageItem
-
-      @common( )
       return output.get()
 
-    giveMeASeizure: ->
+    collectAllLayersIncludeEmpty: ->
+      pWin.show( )
+      output.process doc
+      pWin.close( )
 
-      pWin.label = pWin.add "statictext", undefined, ""
-
-      for layer in doc.layers
-        pWin.label.text = "Layer: #{layer.name}"
-
-        for pageItem in layer.pageItems
-          recursePageItem pageItem
-
-      @common( )
-      return output.get()
+      return output.get(true)
   }
 
   methods[options.method]( )
