@@ -8,6 +8,8 @@ ai2assBackend = ( options ) ->
   org = doc.rulerOrigin
   currLayer = doc.activeLayer
   drawCom = 0
+  tempLayer = null
+  black = new RGBColor();
 
   countPathItems = ( obj ) ->
     recurse = ( obj ) ->
@@ -26,6 +28,47 @@ ai2assBackend = ( options ) ->
     recurse obj
     return count
 
+  makeClip = ( clippingPath ) ->
+    clip = {
+      tempGroup: null
+
+      add: (clippingPath) ->
+        # prepare a group to apply the pathfinder effect to
+        unless tempLayer?
+          tempLayer = doc.layers.add()
+          tempLayer.name = "AI2ASS_tmp"
+          tempLayer.zOrder(ZOrderMethod.SENDTOBACK)
+        unless @tempGroup
+          @tempGroup = tempLayer.groupItems.add()
+
+        # copy all path into the group and make sure it has a fill
+        copy = clippingPath.duplicate(@tempGroup, ElementPlacement.PLACEATBEGINNING)
+        copy.filled = true
+        copy.stroked = false
+        copy.cliping = false
+        copy.fillColor = black
+
+        if @tempGroup.pageItems.length > 1
+          # select the group, apply the pathfinder and expand
+          prevSelection = doc.selection
+          doc.selection = [@tempGroup]
+          app.executeMenuCommand("Live Pathfinder Intersect")
+          app.executeMenuCommand("expandStyle")
+          # expanding created a new group
+          @tempGroup = doc.selection[0]
+          # restore previous selection
+          doc.selection = prevSelection
+
+      copy: -> return makeClip @tempGroup.pageItems[0]
+      get: -> return @tempGroup.pageItems[0]
+      getASS: ->
+        drawing = ASS_createDrawingFromPoints @tempGroup.pageItems[0].pathPoints
+        return "\\clip(#{drawing.join ' '})"
+    }
+
+    clip.add clippingPath
+    return clip
+
   output = {
     pathCnt: null
     processedPathCnt: 0
@@ -35,6 +78,10 @@ ai2assBackend = ( options ) ->
     process: ( obj, clip ) ->
       if not @pathCnt?
         @pathCnt = countPathItems obj
+
+
+      #if clip?
+      #  clip = clip.clone()
 
       unless obj.hidden
         switch obj.typename
@@ -53,8 +100,13 @@ ai2assBackend = ( options ) ->
           when "GroupItem"
             if obj.clipped
               clipPath = (pI for pI in obj.pageItems when pI.clipping)[0]
-              clip = ASS_createDrawingFromPoints(clipPath.pathPoints).join(" ")
+              if clip?
+                clip = clip.copy()
+                clip.add clipPath
+              else
+                clip = makeClip clipPath
               @processedPathCnt += 1
+
             for subPageItem in obj.pageItems when not subPageItem.clipping
               @process subPageItem, clip
 
@@ -68,13 +120,15 @@ ai2assBackend = ( options ) ->
 
             @processedPathCnt += 1
 
-    appendPath: ( path, clip ) ->
+    appendPath: ( path, clipObj ) ->
       stroke = manageColor path, "strokeColor", 3
       fill = manageColor path, "fillColor", 1
       layerName = path.layer.name
       layerNum = path.layer.zOrderPosition
+      opacity = manageOpacity path
+      clip = if clipObj? then clipObj.getASS() else ""
 
-      prefix = @prefix stroke, fill, clip, layerNum, layerName
+      prefix = @prefix stroke, fill, clip, opacity, layerNum, layerName
 
       if not @assSections[layerNum]?
         @assSections[layerNum] = {}
@@ -84,9 +138,8 @@ ai2assBackend = ( options ) ->
 
       Array.prototype.push.apply @assSections[layerNum][prefix], ASS_createDrawingFromPoints path.pathPoints
 
-    prefix: (stroke, fill, clip) ->
-      clipTag = if clip? then "\\clip(#{clip})" else ""
-      "{\\an7\\pos(0,0)#{stroke}#{fill}#{clipTag}\\p1}"
+    prefix: (stroke, fill, clip, opacity) ->
+      "{\\an7\\pos(0,0)#{stroke}#{fill}#{opacity}#{clip}\\p1}"
 
     suffix: -> "{\\p0}"
 
@@ -162,9 +215,8 @@ ai2assBackend = ( options ) ->
       output.prefix = -> ""
       output.suffix = -> ""
     when "line"
-      output.prefix = (stroke, fill, clip, layerNum, layerName) ->
-        clipTag = if clip? then "\\clip(#{clip})" else ""
-        "Dialogue: #{layerNum},0:00:00.00,0:00:00.00,AI,#{layerName},0,0,0,,{\\an7\\pos(0,0)#{stroke}#{fill}#{clipTag}\\p1}"
+      output.prefix = (stroke, fill, clip, opacity, layerNum, layerName) ->
+        "Dialogue: #{layerNum},0:00:00.00,0:00:00.00,AI,#{layerName},0,0,0,,{\\an7\\pos(0,0)#{stroke}#{fill}#{opacity}#{clip}\\p1}"
       output.suffix = -> ""
 
 
@@ -178,21 +230,19 @@ ai2assBackend = ( options ) ->
     (p1 && p2)
 
   zeroPad = ( num ) ->
-    if num < 16
-      "0#{num.toString 16}"
-    else
-      num.toString 16
+    hexStr = num.toString(16).toUpperCase()
+    return if num < 16 then "0#{hexStr}" else hexStr
 
   handleGray = ( theColor ) ->
     pct = theColor.gray
     pct = Math.round (100-pct)*255/100
-    "&H#{zeroPad pct}#{zeroPad pct}#{zeroPad pct}&".toUpperCase( )
+    "&H#{zeroPad pct}#{zeroPad pct}#{zeroPad pct}&"
 
   handleRGB = ( theColor ) ->
     r = Math.round theColor.red # why am I rounding these?
     g = Math.round theColor.green
     b = Math.round theColor.blue
-    "&H#{zeroPad b}#{zeroPad g}#{zeroPad r}&".toUpperCase( )
+    "&H#{zeroPad b}#{zeroPad g}#{zeroPad r}&"
 
   manageColor = ( currPath, field, ASSField ) ->
     fmt = ""
@@ -216,6 +266,12 @@ ai2assBackend = ( options ) ->
     # "LabColor"
     # "PatternColor"
     # "SpotColor"
+
+  manageOpacity = (currPath) ->
+    if currPath.opacity >= 100
+      return ""
+
+    return "\\alpha&H#{zeroPad 255 - Math.round(currPath.opacity/100) * 255}&"
 
   ASS_createDrawingFromPoints = ( pathPoints ) ->
     drawing.new()
