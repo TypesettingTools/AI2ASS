@@ -31,6 +31,7 @@ ai2assBackend = ( options ) ->
   makeClip = ( clippingPath ) ->
     clip = {
       tempGroup: null
+      isVisible: false
 
       add: (clippingPath) ->
         # prepare a group to apply the pathfinder effect to
@@ -56,8 +57,17 @@ ai2assBackend = ( options ) ->
           app.executeMenuCommand("expandStyle")
           # expanding created a new group
           @tempGroup = doc.selection[0]
+
+          # no intersection between paths means we have an empty clipping area
+          if @tempGroup.pageItems.length == 1
+            @isVisible = true
+          else
+            @isVisible = false
+            @tempGroup.pageItems.removeAll()
+
           # restore previous selection
           doc.selection = prevSelection
+        else @isVisible = true
 
       copy: -> return makeClip @tempGroup.pageItems[0]
       get: -> return @tempGroup.pageItems[0]
@@ -79,11 +89,7 @@ ai2assBackend = ( options ) ->
       if not @pathCnt?
         @pathCnt = countPathItems obj
 
-
-      #if clip?
-      #  clip = clip.clone()
-
-      unless obj.hidden
+      unless obj.hidden or clip? and !clip.isVisible
         switch obj.typename
           when "Document"
             for layer in obj.layers
