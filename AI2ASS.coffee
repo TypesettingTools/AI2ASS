@@ -85,11 +85,13 @@ ai2assBackend = ( options ) ->
 
     assSections: []
 
-    process: ( obj, clip ) ->
+    process: ( obj, clip, opacity = 100 ) ->
       if not @pathCnt?
         @pathCnt = countPathItems obj
 
       unless obj.hidden or clip? and !clip.isVisible
+        opacity = if obj.opacity? then opacity * obj.opacity/100 else 100
+
         switch obj.typename
           when "Document"
             for layer in obj.layers
@@ -97,11 +99,11 @@ ai2assBackend = ( options ) ->
 
           when "Layer"
             for subPageItem in obj.pageItems
-              @process subPageItem
+              @process subPageItem, null, opacity
 
           when "CompoundPathItem"
             for path in obj.pathItems
-              @process path, clip
+              @process path, clip, opacity
 
           when "GroupItem"
             if obj.clipped
@@ -114,7 +116,7 @@ ai2assBackend = ( options ) ->
               @processedPathCnt += 1
 
             for subPageItem in obj.pageItems when not subPageItem.clipping
-              @process subPageItem, clip
+              @process subPageItem, clip, opacity
 
           when "PathItem"
             if @processedPathCnt % 10 == 0
@@ -122,19 +124,19 @@ ai2assBackend = ( options ) ->
               pWin.update( )
 
             unless obj.guides or not (obj.stroked or obj.filled or obj.clipping) or not obj.layer.visible
-              @appendPath obj, clip
+              @appendPath obj, clip, opacity
 
             @processedPathCnt += 1
 
-    appendPath: ( path, clipObj ) ->
+    appendPath: ( path, clipObj, opacity ) ->
       stroke = manageColor path, "strokeColor", 3
       fill = manageColor path, "fillColor", 1
       layerName = path.layer.name
       layerNum = path.layer.zOrderPosition
-      opacity = manageOpacity path
+      alpha = manageOpacity opacity
       clip = if clipObj? then clipObj.getASS() else ""
 
-      prefix = @prefix stroke, fill, clip, opacity, layerNum, layerName
+      prefix = @prefix stroke, fill, clip, alpha, layerNum, layerName
 
       if not @assSections[layerNum]?
         @assSections[layerNum] = {}
@@ -144,8 +146,8 @@ ai2assBackend = ( options ) ->
 
       Array.prototype.push.apply @assSections[layerNum][prefix], ASS_createDrawingFromPoints path.pathPoints
 
-    prefix: (stroke, fill, clip, opacity) ->
-      "{\\an7\\pos(0,0)#{stroke}#{fill}#{opacity}#{clip}\\p1}"
+    prefix: (stroke, fill, clip, alpha) ->
+      "{\\an7\\pos(0,0)#{stroke}#{fill}#{alpha}#{clip}\\p1}"
 
     suffix: -> "{\\p0}"
 
@@ -221,8 +223,8 @@ ai2assBackend = ( options ) ->
       output.prefix = -> ""
       output.suffix = -> ""
     when "line"
-      output.prefix = (stroke, fill, clip, opacity, layerNum, layerName) ->
-        "Dialogue: #{layerNum},0:00:00.00,0:00:00.00,AI,#{layerName},0,0,0,,{\\an7\\pos(0,0)#{stroke}#{fill}#{opacity}#{clip}\\p1}"
+      output.prefix = (stroke, fill, clip, alpha, layerNum, layerName) ->
+        "Dialogue: #{layerNum},0:00:00.00,0:00:00.00,AI,#{layerName},0,0,0,,{\\an7\\pos(0,0)#{stroke}#{fill}#{alpha}#{clip}\\p1}"
       output.suffix = -> ""
 
 
@@ -273,11 +275,11 @@ ai2assBackend = ( options ) ->
     # "PatternColor"
     # "SpotColor"
 
-  manageOpacity = (currPath) ->
-    if currPath.opacity >= 100
+  manageOpacity = (opacity) ->
+    if opacity >= 100
       return ""
 
-    return "\\alpha&H#{zeroPad 255 - Math.round(currPath.opacity/100) * 255}&"
+    return "\\alpha&H#{zeroPad 255 - Math.round(opacity)/100 * 255}&"
 
   ASS_createDrawingFromPoints = ( pathPoints ) ->
     drawing.new()
