@@ -45,7 +45,7 @@ ai2assBackend = ( options ) ->
         copy = clippingPath.duplicate(@tempGroup, ElementPlacement.PLACEATBEGINNING)
         copy.filled = true
         copy.stroked = false
-        copy.cliping = false
+        copy.clipping = false
         copy.fillColor = black
 
         if @tempGroup.pageItems.length > 1
