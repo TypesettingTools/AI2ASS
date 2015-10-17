@@ -140,7 +140,7 @@ ai2assBackend = ( options ) ->
       if not @pathCnt?
         @pathCnt = countPathItems obj
 
-      unless obj.hidden or clip? and !clip.isVisible
+      if !obj.hidden and (not clip? or clip.isVisible)
         opacity = if obj.opacity? then opacity * obj.opacity/100 else 100
 
         switch obj.typename
