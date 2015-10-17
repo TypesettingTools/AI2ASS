@@ -24,6 +24,15 @@ win.collectionMethod = win.add "dropdownlist", [0,0,280,20], ["collectActiveLaye
 win.collectionMethod.graphics.font = "Comic Sans MS:12"
 win.collectionMethod.selection = 0
 
+pathCombiningStrategies = {
+  "Disabled": "off"
+  "Safe (Maintain Blending Order)": "safe"
+  "Ignore Blending Order": "any"
+}
+
+win.pathCombining = win.add "dropdownlist", [0,0,280,20], (k for k, v of pathCombiningStrategies)
+win.pathCombining.selection = 1
+
 win.goButton = win.add "button", undefined, "Export"
 win.goButton.graphics.font = "Comic Sans MS:12"
 
@@ -32,11 +41,21 @@ radioString = ( radioGroup ) ->
     if child.value
       return child.text
 
+objToString = (obj) ->
+  fragments = ("#{k}: \"#{v}\"" for k, v of obj).join ", "
+  return "{#{fragments}}"
+
 win.goButton.onClick = ->
   win.outputBox.active = false
   bt = new BridgeTalk
   bt.target = "illustrator"
-  bt.body = "(#{ai2assBackend.toString( )})({method:\"#{win.collectionMethod.selection.text}\",wrapper:\"#{radioString win.clip}\"});"
+  options = objToString {
+    method: win.collectionMethod.selection.text
+    wrapper: radioString win.clip
+    combineStrategy: pathCombiningStrategies[win.pathCombining.selection.text]
+  }
+
+  bt.body = "(#{ai2assBackend.toString( )})(#{options});"
 
   bt.onResult = ( result ) ->
     win.outputBox.text = result.body.replace( /\\\\/g, "\\" ).replace /\\n/g, "\n"

@@ -83,6 +83,7 @@ ai2assBackend = ( options ) ->
     pathCnt: null
     processedPathCnt: 0
     layers: []
+    combineStrategy: "safe"
 
     makeLayer: (emptyPrefix) ->
       layer = {
@@ -92,7 +93,7 @@ ai2assBackend = ( options ) ->
         emptyPrefix: null
 
         makeMergeGroup: ->
-          {
+          group = {
             dirtyRects: []
             lines: {}
 
@@ -109,17 +110,26 @@ ai2assBackend = ( options ) ->
               return bounds[2]-bounds[0] == 0 and bounds[3]-bounds[1] == 0
 
             isMergeable: (path) ->
-              bounds = path.visibleBounds
-
-              if @isZeroArea bounds
-                return true
-
-              for rect in @dirtyRects
-                if bounds[2] > rect[0] and bounds[0] < rect[2] and bounds[3] < rect[1] and bounds[1] > rect[3]
+              switch @combineStrategy
+                when "off"
                   return false
+                when "any"
+                  return true
+                when "safe"
+                  bounds = path.visibleBounds
 
-              return true
+                  if @isZeroArea bounds
+                    return true
+
+                  for rect in @dirtyRects
+                    if bounds[2] > rect[0] and bounds[0] < rect[2] and bounds[3] < rect[1] and bounds[1] > rect[3]
+                      return false
+
+                  return true
           }
+
+          group.combineStrategy = @combineStrategy
+          return group
 
         addGroup: ->
           @currGroupIdx += 1
@@ -134,6 +144,7 @@ ai2assBackend = ( options ) ->
 
       layer.addGroup()
       layer.emptyPrefix = emptyPrefix
+      layer.combineStrategy = @combineStrategy
       return layer
 
     process: ( obj, clip, opacity = 100 ) ->
@@ -268,6 +279,9 @@ ai2assBackend = ( options ) ->
 
   }
 
+  if options.combineStrategy?
+    output.combineStrategy = options.combineStrategy
+
   switch options.wrapper
     when "clip"
       output.prefix = -> "\\clip("
@@ -284,7 +298,6 @@ ai2assBackend = ( options ) ->
       output.suffix = -> ""
       output.emptyPrefix = (layerNum, layerName) ->
         "Dialogue: #{layerNum},0:00:00.00,0:00:00.00,AI,#{layerName},0,0,0,,"
-
 
   alert "Your colorspace needs to be RGB if you want colors." if doc.documentColorSpace == DocumentColorSpace.CMYK
 
