@@ -82,8 +82,59 @@ ai2assBackend = ( options ) ->
   output = {
     pathCnt: null
     processedPathCnt: 0
+    layers: []
 
-    assSections: []
+    makeLayer: (emptyPrefix) ->
+      layer = {
+        groups: []
+        currGroupIdx: -1
+        currGroup: null
+        emptyPrefix: null
+
+        makeMergeGroup: ->
+          {
+            dirtyRects: []
+            lines: {}
+
+            addPath: (path, prefix) ->
+              unless @isZeroArea path.visibleBounds
+                @dirtyRects.push path.visibleBounds
+                drawing = ASS_createDrawingFromPoints path.pathPoints
+
+                if @lines[prefix]?
+                  Array.prototype.push.apply @lines[prefix], drawing
+                else @lines[prefix] = drawing
+
+            isZeroArea: (bounds) ->
+              return bounds[2]-bounds[0] == 0 and bounds[3]-bounds[1] == 0
+
+            isMergeable: (path) ->
+              bounds = path.visibleBounds
+
+              if @isZeroArea bounds
+                return true
+
+              for rect in @dirtyRects
+                if bounds[2] > rect[0] and bounds[0] < rect[2] and bounds[3] < rect[1] and bounds[1] > rect[3]
+                  return false
+
+              return true
+          }
+
+        addGroup: ->
+          @currGroupIdx += 1
+          @currGroup = @makeMergeGroup()
+          @groups[@currGroupIdx] = @currGroup
+
+        addPath: (path, prefix) ->
+          unless @currGroup.isMergeable path
+            @addGroup()
+          @currGroup.addPath path, prefix
+      }
+
+      layer.addGroup()
+      layer.emptyPrefix = emptyPrefix
+      return layer
 
     process: ( obj, clip, opacity = 100 ) ->
       if not @pathCnt?
@@ -94,15 +145,18 @@ ai2assBackend = ( options ) ->
 
         switch obj.typename
           when "Document"
-            for layer in obj.layers
+            for layer in obj.layers by -1
               @process layer
 
           when "Layer"
-            for subPageItem in obj.pageItems
-              @process subPageItem, null, opacity
+            if obj.pageItems.length == 0
+              @layers[obj.zOrderPosition] = @makeLayer @emptyPrefix obj.zOrderPosition, obj.name
+            else
+              for subPageItem in obj.pageItems by -1
+                @process subPageItem, null, opacity
 
           when "CompoundPathItem"
-            for path in obj.pathItems
+            for path in obj.pathItems by -1
               @process path, clip, opacity
 
           when "GroupItem"
@@ -115,7 +169,7 @@ ai2assBackend = ( options ) ->
                 clip = makeClip clipPath
               @processedPathCnt += 1
 
-            for subPageItem in obj.pageItems when not subPageItem.clipping
+            for subPageItem in obj.pageItems by -1 when not subPageItem.clipping
               @process subPageItem, clip, opacity
 
           when "PathItem"
@@ -138,31 +192,33 @@ ai2assBackend = ( options ) ->
 
       prefix = @prefix stroke, fill, clip, alpha, layerNum, layerName
 
-      if not @assSections[layerNum]?
-        @assSections[layerNum] = {}
+      layer = @layers[layerNum]
+      unless layer?
+        layer = @makeLayer()
+        @layers[layerNum] = layer
 
-      if not @assSections[layerNum][prefix]?
-        @assSections[layerNum][prefix] = []
-
-      Array.prototype.push.apply @assSections[layerNum][prefix], ASS_createDrawingFromPoints path.pathPoints
+      layer.addPath path, prefix
 
     prefix: (stroke, fill, clip, alpha) ->
       "{\\an7\\pos(0,0)#{stroke}#{fill}#{alpha}#{clip}\\p1}"
 
+    emptyPrefix: -> ""
     suffix: -> "{\\p0}"
 
-    get: (includeEmptyLayers = false) ->
+    get: (includeEmptyLayers) ->
       fragments = []
       suffix = @suffix()
 
-      for shapes, layerNum in @assSections
-        if shapes?
-          for prefix, paths of shapes
-            fragments.push prefix
-            fragments.push paths.join " "
-            fragments.push suffix
+      for layer in @layers when layer?
+        if includeEmptyLayers && layer.emptyPrefix?
+            fragments.push layer.emptyPrefix
             fragments.push "\n"
-        else if includeEmptyLayers
+
+        for mergeGroup in layer.groups
+          for prefix, drawing of mergeGroup.lines
+            fragments.push prefix
+            fragments.push drawing.join " "
+            fragments.push suffix
             fragments.push "\n"
 
       fragments.pop()
@@ -226,6 +282,8 @@ ai2assBackend = ( options ) ->
       output.prefix = (stroke, fill, clip, alpha, layerNum, layerName) ->
         "Dialogue: #{layerNum},0:00:00.00,0:00:00.00,AI,#{layerName},0,0,0,,{\\an7\\pos(0,0)#{stroke}#{fill}#{alpha}#{clip}\\p1}"
       output.suffix = -> ""
+      output.emptyPrefix = (layerNum, layerName) ->
+        "Dialogue: #{layerNum},0:00:00.00,0:00:00.00,AI,#{layerName},0,0,0,,"
 
 
   alert "Your colorspace needs to be RGB if you want colors." if doc.documentColorSpace == DocumentColorSpace.CMYK
