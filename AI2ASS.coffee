@@ -395,38 +395,6 @@ ai2assBackend = ( options ) ->
 
       return output.get()
 
-    collectInnerShadow: ->
-      outputStr = ""
-
-      if currLayer.groupItems.length is 0
-        return "Layer formatting not as expected."
-
-      for outerGroup in currLayer.groupItems
-        if outerGroup.groupItems.length is 0
-          return "Layer formatting not as expected."
-
-        for group in outerGroup.groupItems
-          if group.compoundPathItems.length is 0
-            return "Layer formatting not as expected."
-
-          outlinePaths = group.compoundPathItems[0].pathItems
-          outlineStr = ""
-          glyphPaths = group.compoundPathItems[1].pathItems
-          glyphStr = ""
-
-          for currPath in glyphPaths
-            glyphStr += ASS_createDrawingFromPoints currPath.pathPoints
-
-          for currPath in outlinePaths
-            outlineStr += ASS_createDrawingFromPoints currPath.pathPoints
-
-          glyphStr = glyphStr[0...-1]
-          outlineStr = "{\\clip(#{glyphStr})\\p1}#{outlineStr[0...-1]}"
-          glyphStr = "{\\p1}#{glyphStr}"
-          outputStr += "#{glyphStr}\n#{outlineStr}\n"
-
-      "{innerShadow}\n#{outputStr}"[0...-2]
-
     collectAllLayers: ->
       pWin.show( )
       output.process doc
