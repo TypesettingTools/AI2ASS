@@ -1,6 +1,3 @@
-`#target illustrator`
-`#targetengine main`
-
 dlgRes = "Group { orientation:'column', alignChildren: ['fill', 'fill'], \
   output: Panel { orientation:'column', text: 'ASS Output', \
     edit: EditText {text: 'have ass, will typeset', properties: {multiline: true}, alignment: ['fill', 'fill'], preferredSize: [-1, 100] } \

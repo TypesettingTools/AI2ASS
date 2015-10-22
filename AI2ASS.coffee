@@ -1,3 +1,6 @@
+`#target illustrator`
+`#targetengine main`
+
 ai2assBackend = ( options ) ->
   app.userInteractionLevel = UserInteractionLevel.DISPLAYALERTS
   pWin = new Window "palette"

@@ -18,7 +18,8 @@ Has been used with CS5, CS6 and CC versions of Illustrator.
 ##### Can export the current layer or all layers at once.
 
 ##### Shapes are separated both by layer and the prefixes of the chosen output format (which may include color, stroke, opacity and clipping paths).
-Paths that share all these attributes can be merged into a single line. The following merge strategies are available: 
+Paths that share all these attributes can be merged into a single line.
+The following merge strategies are available:
 
 + __Disabled__: turns line merging off
 + __Safe__: merges lines in a way that doesn't disturb your scene graph order
@@ -38,7 +39,10 @@ be too slow to run on their setup anyway.
 ##### Exports clipping paths as \clips of their respective lines
 
 ##### There is basic transparency support
-AI2ASS correctly calculates the opacity for every path and exports it as `\alpha` override tag. However, output will only be correct when not using any of the blending modes unsupported in ASS (which is all of them except the *Normal* mode).
+AI2ASS correctly calculates the opacity for every path and exports it as
+`\alpha` override tag. However, output will only be correct when not
+using any of the blending modes unsupported in ASS (which is all of them
+except the *Normal* mode).
 
 ### Great, but how do I run it? ###
 
@@ -57,10 +61,6 @@ If you launch Illustrator, the script should now appear in the menu as
 with a button you can click to convert the active layer into an ASS
 drawing. You don't need to close this ever. It's neat.
 
-[`AI2ASS.jsxinc`][rawlib] is provided as a library in case someone wants
-to use this without the UI. Maybe eventually I will write documentation
-about this. Normal people don't need it.
-
 #### WARNING: SHIT MOVES SLOW WHEN YOU HAVE A LOT OF STUFF GOING ON ####
 
 But there's a cool progress bar so you can see that it's going slow.
@@ -69,5 +69,4 @@ But there's a cool progress bar so you can see that it's going slow.
 - AINT NOTHIN THIS IS PERFECT
 
 [screenshit]: https://raw.github.com/torque/AI2ASS/master/screenshot.png
-[rawlib]: https://raw.github.com/torque/AI2ASS/master/built/AI2ASS.jsxinc
 [raw]: https://raw.github.com/torque/AI2ASS/master/built/AI2ASS.jsx
