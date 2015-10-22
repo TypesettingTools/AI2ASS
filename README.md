@@ -68,5 +68,9 @@ But there's a cool progress bar so you can see that it's going slow.
 ### TODO ###
 - AINT NOTHIN THIS IS PERFECT
 
+#### License
+
+ISC. See COPYING for details.
+
 [screenshit]: https://raw.github.com/torque/AI2ASS/master/screenshot.png
 [raw]: https://raw.github.com/torque/AI2ASS/master/built/AI2ASS.jsx
