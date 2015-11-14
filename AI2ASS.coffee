@@ -113,6 +113,9 @@ ai2assBackend = ( options ) ->
               return bounds[2]-bounds[0] == 0 and bounds[3]-bounds[1] == 0
 
             isMergeable: (path) ->
+              if path.parent.typename == "CompoundPathItem"
+                return true
+
               switch @combineStrategy
                 when "off"
                   return false
