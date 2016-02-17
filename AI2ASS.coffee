@@ -95,10 +95,11 @@ ai2assBackend = ( options ) ->
         currGroup: null
         emptyPrefix: null
 
-        makeMergeGroup: ->
+        makeMergeGroup: () ->
           group = {
             dirtyRects: []
             lines: {}
+            layer: @
 
             addPath: (path, prefix) ->
               unless @isZeroArea path.visibleBounds
@@ -116,7 +117,7 @@ ai2assBackend = ( options ) ->
               if path.parent.typename == "CompoundPathItem"
                 return true
 
-              switch @combineStrategy
+              switch @layer.combineStrategy
                 when "off"
                   return false
                 when "any"
@@ -134,7 +135,6 @@ ai2assBackend = ( options ) ->
                   return true
           }
 
-          group.combineStrategy = @combineStrategy
           return group
 
         addGroup: ->
@@ -148,9 +148,9 @@ ai2assBackend = ( options ) ->
           @currGroup.addPath path, prefix
       }
 
-      layer.addGroup()
       layer.emptyPrefix = emptyPrefix
       layer.combineStrategy = @combineStrategy
+      layer.addGroup()
       return layer
 
     process: ( obj, clip, opacity = 100 ) ->
