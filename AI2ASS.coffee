@@ -9,9 +9,6 @@ ai2assBackend = ( options ) ->
   pWin.pBar.preferredSize = [ 250, 10 ]
   doc = app.activeDocument
   org = doc.rulerOrigin
-  currLayer = doc.activeLayer
-  drawCom = 0
-  tempLayer = null
   black = new RGBColor();
 
   countPathItems = ( obj ) ->
@@ -31,216 +28,251 @@ ai2assBackend = ( options ) ->
     recurse obj
     return count
 
-  makeClip = ( clippingPath ) ->
-    clip = {
-      tempGroup: null
-      isVisible: false
+  run = (root = doc, includeEmptyLayers) ->
+    output = {
+      combineStrategy: "safe"
+      layers: []
+      pathCnt: null
+      processedPathCnt: 0
+      tempLayer: null
 
-      add: (clippingPath) ->
-        # prepare a group to apply the pathfinder effect to
-        unless tempLayer?
-          tempLayer = doc.layers.add()
-          tempLayer.name = "AI2ASS_tmp"
-          tempLayer.zOrder(ZOrderMethod.SENDTOBACK)
-        unless @tempGroup
-          @tempGroup = tempLayer.groupItems.add()
+      makeTempLayer: (name = "AI2ASS_tmp") ->
+        @tempLayer = doc.layers.add()
+        @tempLayer.name = name
+        @tempLayer.zOrder(ZOrderMethod.SENDTOBACK)
 
-        # copy all path into the group and make sure it has a fill
-        copy = clippingPath.duplicate(@tempGroup, ElementPlacement.PLACEATBEGINNING)
-        copy.filled = true
-        copy.stroked = false
-        copy.clipping = false
-        copy.fillColor = black
+      makeClip: (clippingPath) ->
+        clip = {
+          tempGroup: null
+          isVisible: false
+          output: @
 
-        if @tempGroup.pageItems.length > 1
-          # select the group, apply the pathfinder and expand
-          prevSelection = doc.selection
-          doc.selection = [@tempGroup]
-          app.executeMenuCommand("Live Pathfinder Intersect")
-          app.executeMenuCommand("expandStyle")
-          # expanding created a new group
-          @tempGroup = doc.selection[0]
+          add: (clippingPath) ->
+            # prepare a group to apply the pathfinder effect to
+            @output.makeTempLayer() unless @output.tempLayer?
 
-          # no intersection between paths means we have an empty clipping area
-          if @tempGroup.pageItems.length == 1
-            @isVisible = true
-          else
-            @isVisible = false
-            @tempGroup.pageItems.removeAll()
+            unless @tempGroup
+              @tempGroup = @output.tempLayer.groupItems.add()
 
-          # restore previous selection
-          doc.selection = prevSelection
-        else @isVisible = true
+            # copy all path into the group and make sure it has a fill
+            copy = clippingPath.duplicate(@tempGroup, ElementPlacement.PLACEATBEGINNING)
+            copy.filled = true
+            copy.stroked = false
+            copy.clipping = false
+            copy.fillColor = black
 
-      copy: -> return makeClip @tempGroup.pageItems[0]
-      get: -> return @tempGroup.pageItems[0]
-      getASS: ->
-        drawing = ASS_createDrawingFromPoints @tempGroup.pageItems[0].pathPoints
-        return "\\clip(#{drawing.join ' '})"
-    }
+            if @tempGroup.pageItems.length > 1
+              # select the group, apply the pathfinder and expand
+              prevSelection = doc.selection
+              doc.selection = [@tempGroup]
+              app.executeMenuCommand("Live Pathfinder Intersect")
+              app.executeMenuCommand("expandStyle")
+              # expanding created a new group
+              @tempGroup = doc.selection[0]
 
-    clip.add clippingPath
-    return clip
-
-  output = {
-    pathCnt: null
-    processedPathCnt: 0
-    layers: []
-    combineStrategy: "safe"
-
-    makeLayer: (emptyPrefix) ->
-      layer = {
-        groups: []
-        currGroupIdx: -1
-        currGroup: null
-        emptyPrefix: null
-
-        makeMergeGroup: () ->
-          group = {
-            dirtyRects: []
-            lines: {}
-            layer: @
-
-            addPath: (path, prefix) ->
-              unless @isZeroArea path.visibleBounds
-                @dirtyRects.push path.visibleBounds
-                drawing = ASS_createDrawingFromPoints path.pathPoints
-
-                if @lines[prefix]?
-                  Array.prototype.push.apply @lines[prefix], drawing
-                else @lines[prefix] = drawing
-
-            isZeroArea: (bounds) ->
-              return bounds[2]-bounds[0] == 0 and bounds[3]-bounds[1] == 0
-
-            isMergeable: (path) ->
-              if path.parent.typename == "CompoundPathItem"
-                return true
-
-              switch @layer.combineStrategy
-                when "off"
-                  return false
-                when "any"
-                  return true
-                when "safe"
-                  bounds = path.visibleBounds
-
-                  if @isZeroArea bounds
-                    return true
-
-                  for rect in @dirtyRects
-                    if bounds[2] > rect[0] and bounds[0] < rect[2] and bounds[3] < rect[1] and bounds[1] > rect[3]
-                      return false
-
-                  return true
-          }
-
-          return group
-
-        addGroup: ->
-          @currGroupIdx += 1
-          @currGroup = @makeMergeGroup()
-          @groups[@currGroupIdx] = @currGroup
-
-        addPath: (path, prefix) ->
-          unless @currGroup.isMergeable path
-            @addGroup()
-          @currGroup.addPath path, prefix
-      }
-
-      layer.emptyPrefix = emptyPrefix
-      layer.combineStrategy = @combineStrategy
-      layer.addGroup()
-      return layer
-
-    process: ( obj, clip, opacity = 100 ) ->
-      if not @pathCnt?
-        @pathCnt = countPathItems obj
-
-      if !obj.hidden and (not clip? or clip.isVisible)
-        opacity = if obj.opacity? then opacity * obj.opacity/100 else 100
-
-        switch obj.typename
-          when "Document"
-            for layer in obj.layers by -1
-              @process layer
-
-          when "Layer"
-            if obj.pageItems.length == 0
-              @layers[obj.zOrderPosition] = @makeLayer @emptyPrefix obj.zOrderPosition, obj.name
-            else
-              for subPageItem in obj.pageItems by -1
-                @process subPageItem, null, opacity
-
-          when "CompoundPathItem"
-            for path in obj.pathItems by -1
-              @process path, clip, opacity
-
-          when "GroupItem"
-            if obj.clipped
-              clipPath = (pI for pI in obj.pageItems when pI.clipping)[0]
-              if clip?
-                clip = clip.copy()
-                clip.add clipPath
+              # no intersection between paths means we have an empty clipping area
+              if @tempGroup.pageItems.length == 1
+                @isVisible = true
               else
-                clip = makeClip clipPath
+                @isVisible = false
+                @tempGroup.pageItems.removeAll()
+
+              # restore previous selection
+              doc.selection = prevSelection
+            else @isVisible = true
+
+          copy: -> return makeClip @tempGroup.pageItems[0]
+          get: -> return @tempGroup.pageItems[0]
+          getASS: ->
+            drawing = ASS_createDrawingFromPoints @tempGroup.pageItems[0].pathPoints
+            return "\\clip(#{drawing.join ' '})"
+        }
+
+        clip.add clippingPath
+        return clip
+
+      makeLayer: (emptyPrefix) ->
+        layer = {
+          groups: []
+          currGroupIdx: -1
+          currGroup: null
+          emptyPrefix: null
+
+          makeMergeGroup: () ->
+            group = {
+              dirtyRects: []
+              lines: {}
+              layer: @
+
+              addPath: (path, prefix) ->
+                unless @isZeroArea path.visibleBounds
+                  @dirtyRects.push path.visibleBounds
+                  drawing = ASS_createDrawingFromPoints path.pathPoints
+
+                  if @lines[prefix]?
+                    Array.prototype.push.apply @lines[prefix], drawing
+                  else @lines[prefix] = drawing
+
+              isZeroArea: (bounds) ->
+                return bounds[2]-bounds[0] == 0 and bounds[3]-bounds[1] == 0
+
+              isMergeable: (path) ->
+                if path.parent.typename == "CompoundPathItem"
+                  return true
+
+                switch @layer.combineStrategy
+                  when "off"
+                    return false
+                  when "any"
+                    return true
+                  when "safe"
+                    bounds = path.visibleBounds
+
+                    if @isZeroArea bounds
+                      return true
+
+                    for rect in @dirtyRects
+                      if bounds[2] > rect[0] and bounds[0] < rect[2] and bounds[3] < rect[1] and bounds[1] > rect[3]
+                        return false
+
+                    return true
+            }
+
+            return group
+
+          addGroup: ->
+            @currGroupIdx += 1
+            @currGroup = @makeMergeGroup()
+            @groups[@currGroupIdx] = @currGroup
+
+          addPath: (path, prefix) ->
+            unless @currGroup.isMergeable path
+              @addGroup()
+            @currGroup.addPath path, prefix
+        }
+
+        layer.emptyPrefix = emptyPrefix
+        layer.combineStrategy = @combineStrategy
+        layer.addGroup()
+        return layer
+
+      process: ( obj, clip, opacity = 100 ) ->
+        if not @pathCnt?
+          @pathCnt = countPathItems obj
+
+        if !obj.hidden and (not clip? or clip.isVisible)
+          opacity = if obj.opacity? then opacity * obj.opacity/100 else 100
+
+          switch obj.typename
+            when "Document"
+              for layer in obj.layers by -1
+                @process layer
+
+            when "Layer"
+              if obj.pageItems.length == 0
+                @layers[obj.zOrderPosition] = @makeLayer @emptyPrefix obj.zOrderPosition, obj.name
+              else
+                for subPageItem in obj.pageItems by -1
+                  @process subPageItem, null, opacity
+
+            when "CompoundPathItem"
+              for path in obj.pathItems by -1
+                @process path, clip, opacity
+
+            when "GroupItem"
+              if obj.clipped
+                clipPath = (pI for pI in obj.pageItems when pI.clipping)[0]
+                if clip?
+                  clip = clip.copy()
+                  clip.add clipPath
+                else
+                  clip = @makeClip clipPath
+                @processedPathCnt += 1
+
+              for subPageItem in obj.pageItems by -1 when not subPageItem.clipping
+                @process subPageItem, clip, opacity
+
+            when "PathItem"
+              if @processedPathCnt % 10 == 0
+                pWin.pBar.value = Math.ceil @processedPathCnt*250/@pathCnt
+                pWin.update( )
+
+              unless obj.guides or not (obj.stroked or obj.filled or obj.clipping) or not obj.layer.visible
+                @appendPath obj, clip, opacity
+
               @processedPathCnt += 1
 
-            for subPageItem in obj.pageItems by -1 when not subPageItem.clipping
-              @process subPageItem, clip, opacity
+      appendPath: ( path, clipObj, opacity ) ->
+        stroke = manageColor path, "strokeColor", 3
+        fill = manageColor path, "fillColor", 1
+        layerName = path.layer.name
+        layerNum = path.layer.zOrderPosition
+        alpha = manageOpacity opacity
+        clip = if clipObj? then clipObj.getASS() else ""
 
-          when "PathItem"
-            if @processedPathCnt % 10 == 0
-              pWin.pBar.value = Math.ceil @processedPathCnt*250/@pathCnt
-              pWin.update( )
+        prefix = @prefix stroke, fill, clip, alpha, layerNum, layerName
 
-            unless obj.guides or not (obj.stroked or obj.filled or obj.clipping) or not obj.layer.visible
-              @appendPath obj, clip, opacity
+        layer = @layers[layerNum]
+        unless layer?
+          layer = @makeLayer()
+          @layers[layerNum] = layer
 
-            @processedPathCnt += 1
+        layer.addPath path, prefix
 
-    appendPath: ( path, clipObj, opacity ) ->
-      stroke = manageColor path, "strokeColor", 3
-      fill = manageColor path, "fillColor", 1
-      layerName = path.layer.name
-      layerNum = path.layer.zOrderPosition
-      alpha = manageOpacity opacity
-      clip = if clipObj? then clipObj.getASS() else ""
+      prefix: (stroke, fill, clip, alpha) ->
+        "{\\an7\\pos(0,0)#{stroke}#{fill}#{alpha}#{clip}\\p1}"
 
-      prefix = @prefix stroke, fill, clip, alpha, layerNum, layerName
+      emptyPrefix: -> ""
+      suffix: -> "{\\p0}"
 
-      layer = @layers[layerNum]
-      unless layer?
-        layer = @makeLayer()
-        @layers[layerNum] = layer
+      get: (includeEmptyLayers) ->
+        fragments = []
+        suffix = @suffix()
 
-      layer.addPath path, prefix
+        for layer in @layers when layer?
+          if includeEmptyLayers && layer.emptyPrefix?
+              fragments.push layer.emptyPrefix
+              fragments.push "\n"
 
-    prefix: (stroke, fill, clip, alpha) ->
-      "{\\an7\\pos(0,0)#{stroke}#{fill}#{alpha}#{clip}\\p1}"
+          for mergeGroup in layer.groups
+            for prefix, drawing of mergeGroup.lines
+              fragments.push prefix
+              fragments.push drawing.join " "
+              fragments.push suffix
+              fragments.push "\n"
 
-    emptyPrefix: -> ""
-    suffix: -> "{\\p0}"
+        fragments.pop()
+        return fragments.join ""
+    }
 
-    get: (includeEmptyLayers) ->
-      fragments = []
-      suffix = @suffix()
+    if options.combineStrategy?
+      output.combineStrategy = options.combineStrategy
 
-      for layer in @layers when layer?
-        if includeEmptyLayers && layer.emptyPrefix?
-            fragments.push layer.emptyPrefix
-            fragments.push "\n"
+    switch options.wrapper
+      when "clip"
+        output.prefix = -> "\\clip("
+        output.suffix = -> ")"
+      when "iclip"
+        output.prefix = -> "\\iclip("
+        output.suffix = -> ")"
+      when "bare"
+        output.prefix = -> ""
+        output.suffix = -> ""
+      when "line"
+        output.prefix = (stroke, fill, clip, alpha, layerNum, layerName) ->
+          "Dialogue: #{layerNum},0:00:00.00,0:00:00.00,AI,#{layerName},0,0,0,,{\\an7\\pos(0,0)#{stroke}#{fill}#{alpha}#{clip}\\p1}"
+        output.suffix = -> ""
+        output.emptyPrefix = (layerNum, layerName) ->
+          "Dialogue: #{layerNum},0:00:00.00,0:00:00.00,AI,#{layerName},0,0,0,,"
 
-        for mergeGroup in layer.groups
-          for prefix, drawing of mergeGroup.lines
-            fragments.push prefix
-            fragments.push drawing.join " "
-            fragments.push suffix
-            fragments.push "\n"
+    alert "Your colorspace needs to be RGB if you want colors." if doc.documentColorSpace == DocumentColorSpace.CMYK
 
-      fragments.pop()
-      return fragments.join ""
-  }
+    pWin.show()
+    output.process root
+
+    output.tempLayer.remove() if output.tempLayer?
+    pWin.close()
+    return output.get(includeEmptyLayers)
 
   drawing = {
     commands: []
@@ -284,28 +316,6 @@ ai2assBackend = ( options ) ->
       @commands.push Math.round( (doc.height - (org[1] + coordArr[1]))*100 )/100
 
   }
-
-  if options.combineStrategy?
-    output.combineStrategy = options.combineStrategy
-
-  switch options.wrapper
-    when "clip"
-      output.prefix = -> "\\clip("
-      output.suffix = -> ")"
-    when "iclip"
-      output.prefix = -> "\\iclip("
-      output.suffix = -> ")"
-    when "bare"
-      output.prefix = -> ""
-      output.suffix = -> ""
-    when "line"
-      output.prefix = (stroke, fill, clip, alpha, layerNum, layerName) ->
-        "Dialogue: #{layerNum},0:00:00.00,0:00:00.00,AI,#{layerName},0,0,0,,{\\an7\\pos(0,0)#{stroke}#{fill}#{alpha}#{clip}\\p1}"
-      output.suffix = -> ""
-      output.emptyPrefix = (layerNum, layerName) ->
-        "Dialogue: #{layerNum},0:00:00.00,0:00:00.00,AI,#{layerName},0,0,0,,"
-
-  alert "Your colorspace needs to be RGB if you want colors." if doc.documentColorSpace == DocumentColorSpace.CMYK
 
 
 
@@ -392,28 +402,15 @@ ai2assBackend = ( options ) ->
       # LAYER, WHICH MEANS IT IS IMPOSSIBLE TO REPRODUCE THE WAY
       # SUBLAYERS ARE LAYERED. TL;DR IF YOU STICK A LAYER INSIDE ANOTHER
       # LAYER, FUCK YOU FOREVER.
+      currLayer = doc.activeLayer
+
       unless currLayer.visible
         return "Not doing anything to that invisible layer."
+      run currLayer
 
-      pWin.show( )
-      output.process currLayer
-      pWin.close( )
+    collectAllLayers: -> run()
 
-      return output.get()
-
-    collectAllLayers: ->
-      pWin.show( )
-      output.process doc
-      pWin.close( )
-
-      return output.get()
-
-    collectAllLayersIncludeEmpty: ->
-      pWin.show( )
-      output.process doc
-      pWin.close( )
-
-      return output.get(true)
+    collectAllLayersIncludeEmpty: -> run doc, true
   }
 
   methods[options.method]( )
