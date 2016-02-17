@@ -3,7 +3,7 @@
 var ai2assBackend, backendScript, bt, dlg, dlgRes, exportMethods, k, objToString, outputFormats, pathCombiningStrategies, radioString, v, win;
 
 ai2assBackend = function(options) {
-  var ASS_createDrawingFromPoints, black, checkLinear, countPathItems, currLayer, doc, drawCom, drawing, handleGray, handleRGB, makeClip, manageColor, manageOpacity, methods, org, output, pWin, tempLayer, zeroPad;
+  var ASS_createDrawingFromPoints, black, checkLinear, countPathItems, doc, drawing, handleGray, handleRGB, manageColor, manageOpacity, methods, org, pWin, run, zeroPad;
   app.userInteractionLevel = UserInteractionLevel.DISPLAYALERTS;
   pWin = new Window("palette");
   pWin.text = "Progress Occurs";
@@ -11,9 +11,6 @@ ai2assBackend = function(options) {
   pWin.pBar.preferredSize = [250, 10];
   doc = app.activeDocument;
   org = doc.rulerOrigin;
-  currLayer = doc.activeLayer;
-  drawCom = 0;
-  tempLayer = null;
   black = new RGBColor();
   countPathItems = function(obj) {
     var count, recurse;
@@ -58,277 +55,340 @@ ai2assBackend = function(options) {
     recurse(obj);
     return count;
   };
-  makeClip = function(clippingPath) {
-    var clip;
-    clip = {
-      tempGroup: null,
-      isVisible: false,
-      add: function(clippingPath) {
-        var copy, prevSelection;
-        if (tempLayer == null) {
-          tempLayer = doc.layers.add();
-          tempLayer.name = "AI2ASS_tmp";
-          tempLayer.zOrder(ZOrderMethod.SENDTOBACK);
+  run = function(root, includeEmptyLayers) {
+    var output;
+    if (root == null) {
+      root = doc;
+    }
+    output = {
+      combineStrategy: "safe",
+      layers: [],
+      pathCnt: null,
+      processedPathCnt: 0,
+      tempLayer: null,
+      makeTempLayer: function(name) {
+        if (name == null) {
+          name = "AI2ASS_tmp";
         }
-        if (!this.tempGroup) {
-          this.tempGroup = tempLayer.groupItems.add();
-        }
-        copy = clippingPath.duplicate(this.tempGroup, ElementPlacement.PLACEATBEGINNING);
-        copy.filled = true;
-        copy.stroked = false;
-        copy.clipping = false;
-        copy.fillColor = black;
-        if (this.tempGroup.pageItems.length > 1) {
-          prevSelection = doc.selection;
-          doc.selection = [this.tempGroup];
-          app.executeMenuCommand("Live Pathfinder Intersect");
-          app.executeMenuCommand("expandStyle");
-          this.tempGroup = doc.selection[0];
-          if (this.tempGroup.pageItems.length === 1) {
-            this.isVisible = true;
-          } else {
-            this.isVisible = false;
-            this.tempGroup.pageItems.removeAll();
+        this.tempLayer = doc.layers.add();
+        this.tempLayer.name = name;
+        return this.tempLayer.zOrder(ZOrderMethod.SENDTOBACK);
+      },
+      makeClip: function(clippingPath) {
+        var clip;
+        clip = {
+          tempGroup: null,
+          isVisible: false,
+          output: this,
+          add: function(clippingPath) {
+            var copy, prevSelection;
+            if (this.output.tempLayer == null) {
+              this.output.makeTempLayer();
+            }
+            if (!this.tempGroup) {
+              this.tempGroup = this.output.tempLayer.groupItems.add();
+            }
+            copy = clippingPath.duplicate(this.tempGroup, ElementPlacement.PLACEATBEGINNING);
+            copy.filled = true;
+            copy.stroked = false;
+            copy.clipping = false;
+            copy.fillColor = black;
+            if (this.tempGroup.pageItems.length > 1) {
+              prevSelection = doc.selection;
+              doc.selection = [this.tempGroup];
+              app.executeMenuCommand("Live Pathfinder Intersect");
+              app.executeMenuCommand("expandStyle");
+              this.tempGroup = doc.selection[0];
+              if (this.tempGroup.pageItems.length === 1) {
+                this.isVisible = true;
+              } else {
+                this.isVisible = false;
+                this.tempGroup.pageItems.removeAll();
+              }
+              return doc.selection = prevSelection;
+            } else {
+              return this.isVisible = true;
+            }
+          },
+          copy: function() {
+            return makeClip(this.tempGroup.pageItems[0]);
+          },
+          get: function() {
+            return this.tempGroup.pageItems[0];
+          },
+          getASS: function() {
+            var drawing;
+            drawing = ASS_createDrawingFromPoints(this.tempGroup.pageItems[0].pathPoints);
+            return "\\clip(" + (drawing.join(' ')) + ")";
           }
-          return doc.selection = prevSelection;
-        } else {
-          return this.isVisible = true;
-        }
+        };
+        clip.add(clippingPath);
+        return clip;
       },
-      copy: function() {
-        return makeClip(this.tempGroup.pageItems[0]);
-      },
-      get: function() {
-        return this.tempGroup.pageItems[0];
-      },
-      getASS: function() {
-        var drawing;
-        drawing = ASS_createDrawingFromPoints(this.tempGroup.pageItems[0].pathPoints);
-        return "\\clip(" + (drawing.join(' ')) + ")";
-      }
-    };
-    clip.add(clippingPath);
-    return clip;
-  };
-  output = {
-    pathCnt: null,
-    processedPathCnt: 0,
-    layers: [],
-    combineStrategy: "safe",
-    makeLayer: function(emptyPrefix) {
-      var layer;
-      layer = {
-        groups: [],
-        currGroupIdx: -1,
-        currGroup: null,
-        emptyPrefix: null,
-        makeMergeGroup: function() {
-          var group;
-          group = {
-            dirtyRects: [],
-            lines: {},
-            addPath: function(path, prefix) {
-              var drawing;
-              if (!this.isZeroArea(path.visibleBounds)) {
-                this.dirtyRects.push(path.visibleBounds);
-                drawing = ASS_createDrawingFromPoints(path.pathPoints);
-                if (this.lines[prefix] != null) {
-                  return Array.prototype.push.apply(this.lines[prefix], drawing);
-                } else {
-                  return this.lines[prefix] = drawing;
+      makeLayer: function(emptyPrefix) {
+        var layer;
+        layer = {
+          groups: [],
+          currGroupIdx: -1,
+          currGroup: null,
+          emptyPrefix: null,
+          makeMergeGroup: function() {
+            var group;
+            group = {
+              dirtyRects: [],
+              lines: {},
+              layer: this,
+              addPath: function(path, prefix) {
+                var drawing;
+                if (!this.isZeroArea(path.visibleBounds)) {
+                  this.dirtyRects.push(path.visibleBounds);
+                  drawing = ASS_createDrawingFromPoints(path.pathPoints);
+                  if (this.lines[prefix] != null) {
+                    return Array.prototype.push.apply(this.lines[prefix], drawing);
+                  } else {
+                    return this.lines[prefix] = drawing;
+                  }
+                }
+              },
+              isZeroArea: function(bounds) {
+                return bounds[2] - bounds[0] === 0 && bounds[3] - bounds[1] === 0;
+              },
+              isMergeable: function(path) {
+                var bounds, i, len, rect, ref;
+                if (path.parent.typename === "CompoundPathItem") {
+                  return true;
+                }
+                switch (this.layer.combineStrategy) {
+                  case "off":
+                    return false;
+                  case "any":
+                    return true;
+                  case "safe":
+                    bounds = path.visibleBounds;
+                    if (this.isZeroArea(bounds)) {
+                      return true;
+                    }
+                    ref = this.dirtyRects;
+                    for (i = 0, len = ref.length; i < len; i++) {
+                      rect = ref[i];
+                      if (bounds[2] > rect[0] && bounds[0] < rect[2] && bounds[3] < rect[1] && bounds[1] > rect[3]) {
+                        return false;
+                      }
+                    }
+                    return true;
                 }
               }
-            },
-            isZeroArea: function(bounds) {
-              return bounds[2] - bounds[0] === 0 && bounds[3] - bounds[1] === 0;
-            },
-            isMergeable: function(path) {
-              var bounds, i, len, rect, ref;
-              if (path.parent.typename === "CompoundPathItem") {
-                return true;
+            };
+            return group;
+          },
+          addGroup: function() {
+            this.currGroupIdx += 1;
+            this.currGroup = this.makeMergeGroup();
+            return this.groups[this.currGroupIdx] = this.currGroup;
+          },
+          addPath: function(path, prefix) {
+            if (!this.currGroup.isMergeable(path)) {
+              this.addGroup();
+            }
+            return this.currGroup.addPath(path, prefix);
+          }
+        };
+        layer.emptyPrefix = emptyPrefix;
+        layer.combineStrategy = this.combineStrategy;
+        layer.addGroup();
+        return layer;
+      },
+      process: function(obj, clip, opacity) {
+        var clipPath, i, l, layer, m, n, pI, path, ref, ref1, ref2, ref3, results, results1, results2, results3, subPageItem;
+        if (opacity == null) {
+          opacity = 100;
+        }
+        if (this.pathCnt == null) {
+          this.pathCnt = countPathItems(obj);
+        }
+        if (!obj.hidden && ((clip == null) || clip.isVisible)) {
+          opacity = obj.opacity != null ? opacity * obj.opacity / 100 : 100;
+          switch (obj.typename) {
+            case "Document":
+              ref = obj.layers;
+              results = [];
+              for (i = ref.length - 1; i >= 0; i += -1) {
+                layer = ref[i];
+                results.push(this.process(layer));
               }
-              switch (this.combineStrategy) {
-                case "off":
-                  return false;
-                case "any":
-                  return true;
-                case "safe":
-                  bounds = path.visibleBounds;
-                  if (this.isZeroArea(bounds)) {
-                    return true;
-                  }
-                  ref = this.dirtyRects;
-                  for (i = 0, len = ref.length; i < len; i++) {
-                    rect = ref[i];
-                    if (bounds[2] > rect[0] && bounds[0] < rect[2] && bounds[3] < rect[1] && bounds[1] > rect[3]) {
-                      return false;
+              return results;
+              break;
+            case "Layer":
+              if (obj.pageItems.length === 0) {
+                return this.layers[obj.zOrderPosition] = this.makeLayer(this.emptyPrefix(obj.zOrderPosition, obj.name));
+              } else {
+                ref1 = obj.pageItems;
+                results1 = [];
+                for (l = ref1.length - 1; l >= 0; l += -1) {
+                  subPageItem = ref1[l];
+                  results1.push(this.process(subPageItem, null, opacity));
+                }
+                return results1;
+              }
+              break;
+            case "CompoundPathItem":
+              ref2 = obj.pathItems;
+              results2 = [];
+              for (m = ref2.length - 1; m >= 0; m += -1) {
+                path = ref2[m];
+                results2.push(this.process(path, clip, opacity));
+              }
+              return results2;
+              break;
+            case "GroupItem":
+              if (obj.clipped) {
+                clipPath = ((function() {
+                  var len, n, ref3, results3;
+                  ref3 = obj.pageItems;
+                  results3 = [];
+                  for (n = 0, len = ref3.length; n < len; n++) {
+                    pI = ref3[n];
+                    if (pI.clipping) {
+                      results3.push(pI);
                     }
                   }
-                  return true;
-              }
-            }
-          };
-          group.combineStrategy = this.combineStrategy;
-          return group;
-        },
-        addGroup: function() {
-          this.currGroupIdx += 1;
-          this.currGroup = this.makeMergeGroup();
-          return this.groups[this.currGroupIdx] = this.currGroup;
-        },
-        addPath: function(path, prefix) {
-          if (!this.currGroup.isMergeable(path)) {
-            this.addGroup();
-          }
-          return this.currGroup.addPath(path, prefix);
-        }
-      };
-      layer.addGroup();
-      layer.emptyPrefix = emptyPrefix;
-      layer.combineStrategy = this.combineStrategy;
-      return layer;
-    },
-    process: function(obj, clip, opacity) {
-      var clipPath, i, l, layer, m, n, pI, path, ref, ref1, ref2, ref3, results, results1, results2, results3, subPageItem;
-      if (opacity == null) {
-        opacity = 100;
-      }
-      if (this.pathCnt == null) {
-        this.pathCnt = countPathItems(obj);
-      }
-      if (!obj.hidden && ((clip == null) || clip.isVisible)) {
-        opacity = obj.opacity != null ? opacity * obj.opacity / 100 : 100;
-        switch (obj.typename) {
-          case "Document":
-            ref = obj.layers;
-            results = [];
-            for (i = ref.length - 1; i >= 0; i += -1) {
-              layer = ref[i];
-              results.push(this.process(layer));
-            }
-            return results;
-            break;
-          case "Layer":
-            if (obj.pageItems.length === 0) {
-              return this.layers[obj.zOrderPosition] = this.makeLayer(this.emptyPrefix(obj.zOrderPosition, obj.name));
-            } else {
-              ref1 = obj.pageItems;
-              results1 = [];
-              for (l = ref1.length - 1; l >= 0; l += -1) {
-                subPageItem = ref1[l];
-                results1.push(this.process(subPageItem, null, opacity));
-              }
-              return results1;
-            }
-            break;
-          case "CompoundPathItem":
-            ref2 = obj.pathItems;
-            results2 = [];
-            for (m = ref2.length - 1; m >= 0; m += -1) {
-              path = ref2[m];
-              results2.push(this.process(path, clip, opacity));
-            }
-            return results2;
-            break;
-          case "GroupItem":
-            if (obj.clipped) {
-              clipPath = ((function() {
-                var len, n, ref3, results3;
-                ref3 = obj.pageItems;
-                results3 = [];
-                for (n = 0, len = ref3.length; n < len; n++) {
-                  pI = ref3[n];
-                  if (pI.clipping) {
-                    results3.push(pI);
-                  }
+                  return results3;
+                })())[0];
+                if (clip != null) {
+                  clip = clip.copy();
+                  clip.add(clipPath);
+                } else {
+                  clip = this.makeClip(clipPath);
                 }
-                return results3;
-              })())[0];
-              if (clip != null) {
-                clip = clip.copy();
-                clip.add(clipPath);
-              } else {
-                clip = makeClip(clipPath);
+                this.processedPathCnt += 1;
               }
-              this.processedPathCnt += 1;
-            }
-            ref3 = obj.pageItems;
-            results3 = [];
-            for (n = ref3.length - 1; n >= 0; n += -1) {
-              subPageItem = ref3[n];
-              if (!subPageItem.clipping) {
-                results3.push(this.process(subPageItem, clip, opacity));
+              ref3 = obj.pageItems;
+              results3 = [];
+              for (n = ref3.length - 1; n >= 0; n += -1) {
+                subPageItem = ref3[n];
+                if (!subPageItem.clipping) {
+                  results3.push(this.process(subPageItem, clip, opacity));
+                }
               }
-            }
-            return results3;
-            break;
-          case "PathItem":
-            if (this.processedPathCnt % 10 === 0) {
-              pWin.pBar.value = Math.ceil(this.processedPathCnt * 250 / this.pathCnt);
-              pWin.update();
-            }
-            if (!(obj.guides || !(obj.stroked || obj.filled || obj.clipping) || !obj.layer.visible)) {
-              this.appendPath(obj, clip, opacity);
-            }
-            return this.processedPathCnt += 1;
+              return results3;
+              break;
+            case "PathItem":
+              if (this.processedPathCnt % 10 === 0) {
+                pWin.pBar.value = Math.ceil(this.processedPathCnt * 250 / this.pathCnt);
+                pWin.update();
+              }
+              if (!(obj.guides || !(obj.stroked || obj.filled || obj.clipping) || !obj.layer.visible)) {
+                this.appendPath(obj, clip, opacity);
+              }
+              return this.processedPathCnt += 1;
+          }
         }
-      }
-    },
-    appendPath: function(path, clipObj, opacity) {
-      var alpha, clip, fill, layer, layerName, layerNum, prefix, stroke;
-      stroke = manageColor(path, "strokeColor", 3);
-      fill = manageColor(path, "fillColor", 1);
-      layerName = path.layer.name;
-      layerNum = path.layer.zOrderPosition;
-      alpha = manageOpacity(opacity);
-      clip = clipObj != null ? clipObj.getASS() : "";
-      prefix = this.prefix(stroke, fill, clip, alpha, layerNum, layerName);
-      layer = this.layers[layerNum];
-      if (layer == null) {
-        layer = this.makeLayer();
-        this.layers[layerNum] = layer;
-      }
-      return layer.addPath(path, prefix);
-    },
-    prefix: function(stroke, fill, clip, alpha) {
-      return "{\\an7\\pos(0,0)" + stroke + fill + alpha + clip + "\\p1}";
-    },
-    emptyPrefix: function() {
-      return "";
-    },
-    suffix: function() {
-      return "{\\p0}";
-    },
-    get: function(includeEmptyLayers) {
-      var drawing, fragments, i, l, layer, len, len1, mergeGroup, prefix, ref, ref1, ref2, suffix;
-      fragments = [];
-      suffix = this.suffix();
-      ref = this.layers;
-      for (i = 0, len = ref.length; i < len; i++) {
-        layer = ref[i];
-        if (!(layer != null)) {
-          continue;
+      },
+      appendPath: function(path, clipObj, opacity) {
+        var alpha, clip, fill, layer, layerName, layerNum, prefix, stroke;
+        stroke = manageColor(path, "strokeColor", 3);
+        fill = manageColor(path, "fillColor", 1);
+        layerName = path.layer.name;
+        layerNum = path.layer.zOrderPosition;
+        alpha = manageOpacity(opacity);
+        clip = clipObj != null ? clipObj.getASS() : "";
+        prefix = this.prefix(stroke, fill, clip, alpha, layerNum, layerName);
+        layer = this.layers[layerNum];
+        if (layer == null) {
+          layer = this.makeLayer();
+          this.layers[layerNum] = layer;
         }
-        if (includeEmptyLayers && (layer.emptyPrefix != null)) {
-          fragments.push(layer.emptyPrefix);
-          fragments.push("\n");
-        }
-        ref1 = layer.groups;
-        for (l = 0, len1 = ref1.length; l < len1; l++) {
-          mergeGroup = ref1[l];
-          ref2 = mergeGroup.lines;
-          for (prefix in ref2) {
-            drawing = ref2[prefix];
-            fragments.push(prefix);
-            fragments.push(drawing.join(" "));
-            fragments.push(suffix);
+        return layer.addPath(path, prefix);
+      },
+      prefix: function(stroke, fill, clip, alpha) {
+        return "{\\an7\\pos(0,0)" + stroke + fill + alpha + clip + "\\p1}";
+      },
+      emptyPrefix: function() {
+        return "";
+      },
+      suffix: function() {
+        return "{\\p0}";
+      },
+      get: function(includeEmptyLayers) {
+        var drawing, fragments, i, l, layer, len, len1, mergeGroup, prefix, ref, ref1, ref2, suffix;
+        fragments = [];
+        suffix = this.suffix();
+        ref = this.layers;
+        for (i = 0, len = ref.length; i < len; i++) {
+          layer = ref[i];
+          if (!(layer != null)) {
+            continue;
+          }
+          if (includeEmptyLayers && (layer.emptyPrefix != null)) {
+            fragments.push(layer.emptyPrefix);
             fragments.push("\n");
           }
+          ref1 = layer.groups;
+          for (l = 0, len1 = ref1.length; l < len1; l++) {
+            mergeGroup = ref1[l];
+            ref2 = mergeGroup.lines;
+            for (prefix in ref2) {
+              drawing = ref2[prefix];
+              fragments.push(prefix);
+              fragments.push(drawing.join(" "));
+              fragments.push(suffix);
+              fragments.push("\n");
+            }
+          }
         }
+        fragments.pop();
+        return fragments.join("");
       }
-      fragments.pop();
-      return fragments.join("");
+    };
+    if (options.combineStrategy != null) {
+      output.combineStrategy = options.combineStrategy;
     }
+    switch (options.wrapper) {
+      case "clip":
+        output.prefix = function() {
+          return "\\clip(";
+        };
+        output.suffix = function() {
+          return ")";
+        };
+        break;
+      case "iclip":
+        output.prefix = function() {
+          return "\\iclip(";
+        };
+        output.suffix = function() {
+          return ")";
+        };
+        break;
+      case "bare":
+        output.prefix = function() {
+          return "";
+        };
+        output.suffix = function() {
+          return "";
+        };
+        break;
+      case "line":
+        output.prefix = function(stroke, fill, clip, alpha, layerNum, layerName) {
+          return "Dialogue: " + layerNum + ",0:00:00.00,0:00:00.00,AI," + layerName + ",0,0,0,,{\\an7\\pos(0,0)" + stroke + fill + alpha + clip + "\\p1}";
+        };
+        output.suffix = function() {
+          return "";
+        };
+        output.emptyPrefix = function(layerNum, layerName) {
+          return "Dialogue: " + layerNum + ",0:00:00.00,0:00:00.00,AI," + layerName + ",0,0,0,,";
+        };
+    }
+    if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+      alert("Your colorspace needs to be RGB if you want colors.");
+    }
+    pWin.show();
+    output.process(root);
+    if (output.tempLayer != null) {
+      output.tempLayer.remove();
+    }
+    pWin.close();
+    return output.get(includeEmptyLayers);
   };
   drawing = {
     commands: [],
@@ -372,48 +432,6 @@ ai2assBackend = function(options) {
       return this.commands.push(Math.round((doc.height - (org[1] + coordArr[1])) * 100) / 100);
     }
   };
-  if (options.combineStrategy != null) {
-    output.combineStrategy = options.combineStrategy;
-  }
-  switch (options.wrapper) {
-    case "clip":
-      output.prefix = function() {
-        return "\\clip(";
-      };
-      output.suffix = function() {
-        return ")";
-      };
-      break;
-    case "iclip":
-      output.prefix = function() {
-        return "\\iclip(";
-      };
-      output.suffix = function() {
-        return ")";
-      };
-      break;
-    case "bare":
-      output.prefix = function() {
-        return "";
-      };
-      output.suffix = function() {
-        return "";
-      };
-      break;
-    case "line":
-      output.prefix = function(stroke, fill, clip, alpha, layerNum, layerName) {
-        return "Dialogue: " + layerNum + ",0:00:00.00,0:00:00.00,AI," + layerName + ",0,0,0,,{\\an7\\pos(0,0)" + stroke + fill + alpha + clip + "\\p1}";
-      };
-      output.suffix = function() {
-        return "";
-      };
-      output.emptyPrefix = function(layerNum, layerName) {
-        return "Dialogue: " + layerNum + ",0:00:00.00,0:00:00.00,AI," + layerName + ",0,0,0,,";
-      };
-  }
-  if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
-    alert("Your colorspace needs to be RGB if you want colors.");
-  }
   checkLinear = function(currPoint, prevPoint) {
     var p1, p2;
     p1 = prevPoint.anchor[0] === prevPoint.rightDirection[0] && prevPoint.anchor[1] === prevPoint.rightDirection[1];
@@ -497,25 +515,18 @@ ai2assBackend = function(options) {
   };
   methods = {
     collectActiveLayer: function() {
+      var currLayer;
+      currLayer = doc.activeLayer;
       if (!currLayer.visible) {
         return "Not doing anything to that invisible layer.";
       }
-      pWin.show();
-      output.process(currLayer);
-      pWin.close();
-      return output.get();
+      return run(currLayer);
     },
     collectAllLayers: function() {
-      pWin.show();
-      output.process(doc);
-      pWin.close();
-      return output.get();
+      return run();
     },
     collectAllLayersIncludeEmpty: function() {
-      pWin.show();
-      output.process(doc);
-      pWin.close();
-      return output.get(true);
+      return run(doc, true);
     }
   };
   return methods[options.method]();
